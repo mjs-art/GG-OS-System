@@ -1,0 +1,21 @@
+#!/bin/sh
+
+# 1. Secrets first — a leaked key is the only failure you cannot undo with a revert.
+if command -v gitleaks >/dev/null 2>&1; then
+  gitleaks protect --staged --no-banner --redact --config .gitleaks.toml || {
+    echo ""
+    echo "  Se encontró un posible secreto en lo que vas a commitear."
+    echo "  Sácalo del código y ponlo en .env (que está en .gitignore)."
+    echo "  Si es un falso positivo, agrégalo al allowlist de .gitleaks.toml."
+    exit 1
+  }
+else
+  echo "  gitleaks no está instalado — el escaneo de secretos se saltó."
+  echo "  Instálalo con: brew install gitleaks"
+fi
+
+# 2. Formato y lint solo sobre lo que se toca.
+pnpm exec lint-staged
+
+# 3. El typechecker es global: un cambio en un archivo rompe otro.
+pnpm exec tsc --noEmit

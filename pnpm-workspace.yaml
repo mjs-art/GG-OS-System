@@ -1,0 +1,6 @@
+# Supply chain: postinstall scripts are DENIED by default.
+# Every entry here is an explicit, reviewed exception. Do not add one without
+# checking why the package needs to run code at install time.
+allowBuilds:
+  sharp: true # native image codecs, required by next/image optimisation
+  unrs-resolver: true # native module resolver used by eslint-config-next

@@ -1,0 +1,116 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Cancel superseded runs on the same branch — saves minutes, keeps signal fresh.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# Least privilege by default. A job that needs more asks for it explicitly.
+permissions:
+  contents: read
+
+env:
+  NEXT_TELEMETRY_DISABLED: '1'
+
+jobs:
+  secrets:
+    name: Secretos
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0 # gitleaks escanea toda la historia, no solo el diff
+      # Se usa el binario directo y no gitleaks-action a propósito: la action
+      # exige GITHUB_TOKEN para escanear PRs, arrastra un aviso de licencia y
+      # corre sobre una versión de Node ya deprecada. Esto hace lo mismo, con
+      # la misma config que el pre-commit, y sin partes móviles.
+      - name: Instalar gitleaks
+        run: |
+          # Fijada a propósito, y a la misma que corre el pre-commit local:
+          # si CI y tu máquina escanean con versiones distintas, un hallazgo
+          # aparece hasta el PR y no cuando lo escribiste.
+          VERSION=8.30.1
+          curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${VERSION}/gitleaks_${VERSION}_linux_x64.tar.gz" \
+            | tar -xz -C /usr/local/bin gitleaks
+          gitleaks version
+      - name: Escanear
+        run: gitleaks detect --no-banner --redact --config .gitleaks.toml --verbose
+
+  quality:
+    name: Typecheck, lint, formato y pruebas
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm lint
+      - run: pnpm format:check
+      - run: pnpm test
+      - run: pnpm build
+        # `src/lib/env.ts` valida la config al importarse, así que el build
+        # exige estas dos. Son valores de relleno: el build no habla con
+        # Supabase, solo necesita que la validación pase. Las llaves de verdad
+        # viven en Vercel.
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://ci.placeholder.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-placeholder-anon-key
+          NEXT_PUBLIC_SITE_URL: http://localhost:3000
+
+  database:
+    name: Migraciones y RLS
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Levantar Postgres local
+        run: pnpm exec supabase start --exclude studio,realtime,storage-api,imgproxy,edge-runtime,logflare,vector
+      - name: Aplicar migraciones desde cero
+        run: pnpm exec supabase db reset --no-seed
+      - name: Revisar el esquema
+        run: pnpm exec supabase db lint --level warning --fail-on warning
+      - name: Pruebas de RLS y aislamiento entre clientes
+        run: pnpm exec supabase test db
+
+  e2e:
+    name: Flujos críticos
+    runs-on: ubuntu-latest
+    needs: quality
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # WebKit no es opcional: el proyecto `mobile` emula un iPhone y el portal
+      # de cliente es mobile-first — los clientes lo van a abrir en Safari.
+      # Emular móvil sobre Chromium daría confianza falsa justo en la
+      # superficie que más importa.
+      - run: pnpm exec playwright install --with-deps chromium webkit
+      - run: pnpm test:e2e
+        env:
+          # e2e runs against the mock data layer; no real credentials in CI.
+          NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:54321
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-placeholder-anon-key
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7

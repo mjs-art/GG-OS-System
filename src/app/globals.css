@@ -1,0 +1,177 @@
+@import 'tailwindcss';
+
+/* ==========================================================================
+   Studio OS — sistema de diseño
+   Editorial oscuro, densidad de sala de control.
+
+   Reglas que no se rompen:
+     · Cero sombras. La jerarquía se construye con espacio y peso tipográfico.
+     · Todos los bordes son hairline de 1px en --line.
+     · border-radius 2px en todo.
+     · Nada de gradientes, glassmorphism ni "glow".
+
+   Los colores literales van AQUÍ y en ningún otro lado. En los componentes se
+   usan las utilidades derivadas de estos tokens (bg-ink-2, text-bone,
+   border-line…), nunca un hex suelto.
+   ========================================================================== */
+
+@theme {
+  /* --- Superficies y texto ---------------------------------------------- */
+  --color-ink: #121110; /* fondo — negro cálido, NO negro puro */
+  --color-ink-2: #1c1a18; /* superficies, cards */
+  --color-ink-3: #24211e; /* hover */
+  --color-line: #2e2a26; /* hairlines */
+  --color-bone: #ede9e3; /* texto principal */
+  --color-muted: #8b837a; /* labels, texto secundario */
+
+  /* --- Acento ------------------------------------------------------------ */
+  --color-burnt: #8e2b1e; /* rojo quemado */
+  --color-burnt-hot: #c3462f; /* hover, focus, activo */
+
+  /* --- Semánticos, desaturados a propósito ------------------------------- */
+  --color-critical: #c3462f;
+  --color-high: #a67c52;
+  --color-medium: #8a7b4f;
+  --color-ok: #5f6b5a;
+
+  /* --- Pilares de contenido ---------------------------------------------- */
+  --color-pillar-1: #8e2b1e;
+  --color-pillar-2: #a67c52;
+  --color-pillar-3: #5f6b5a;
+  --color-pillar-4: #4a5568;
+  --color-pillar-5: #7a5c6e;
+  --color-pillar-6: #8a7b4f;
+
+  /* --- Modo cliente: paleta invertida ------------------------------------ */
+  /* El acento del modo cliente es el color de marca DEL CLIENTE, inyectado en
+     runtime como --color-client-brand. Nunca el rojo quemado del estudio. */
+  --color-paper: #f7f5f2;
+  --color-paper-2: #ffffff;
+  --color-paper-line: #e0dbd4;
+
+  /* --- Tipografía --------------------------------------------------------- */
+  --font-display: var(--font-archivo), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-inter-tight), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-plex-mono), ui-monospace, monospace;
+
+  /* --- Radio: 2px en todo -------------------------------------------------- */
+  --radius-xs: 2px;
+  --radius-sm: 2px;
+  --radius-md: 2px;
+  --radius-lg: 2px;
+  --radius-xl: 2px;
+}
+
+@layer base {
+  *,
+  *::before,
+  *::after {
+    border-color: var(--color-line);
+  }
+
+  html {
+    /* El fondo se declara aquí y no solo en el body a propósito.
+       Cuando el html es transparente, el navegador propaga el fondo del body
+       al lienzo — y WebKit, al hacerlo, deja el body reportando
+       `rgba(0,0,0,0)`. Declararlo en html evita esa ambigüedad, hace explícito
+       el color de la página, y quita el flash blanco al hacer overscroll. */
+    background-color: var(--color-ink);
+    scroll-behavior: smooth;
+    /* La navegación por anclas no debe meter el título bajo el header sticky. */
+    scroll-padding-top: 5.5rem;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background-color: var(--color-ink);
+    color: var(--color-bone);
+    font-family: var(--font-sans);
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Foco visible siempre. Quitar el outline sin poner otro es un bug de
+     accesibilidad, no una decisión de diseño. */
+  :focus-visible {
+    outline: 2px solid var(--color-burnt-hot);
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+  :focus:not(:focus-visible) {
+    outline: none;
+  }
+
+  ::selection {
+    background-color: var(--color-burnt);
+    color: var(--color-bone);
+  }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-line) transparent;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+@layer components {
+  /* Display: nombres de cliente, títulos de sección, números grandes. */
+  .type-display {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-stretch: 125%;
+    text-transform: uppercase;
+    letter-spacing: -0.02em;
+    line-height: 1;
+  }
+
+  /* Mono: fechas, contadores, labels de campo, chips de estado, agentes. */
+  .type-mono {
+    font-family: var(--font-mono);
+    font-weight: 500;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    line-height: 1.3;
+  }
+
+  /* Que exista la clase evita que alguien invente border-gray-800 en el
+     componente número 40. */
+  .hairline {
+    border-width: 0;
+    border-bottom-width: 1px;
+    border-color: var(--color-line);
+  }
+}
+
+/* La impresión importa: el modo cliente se descarga como PDF y es el
+   entregable que reemplaza la presentación mensual. */
+@media print {
+  @page {
+    margin: 14mm;
+  }
+  html,
+  body {
+    background: #ffffff !important;
+    color: #121110 !important;
+  }
+  [data-print='hide'] {
+    display: none !important;
+  }
+  a[href]::after {
+    content: '';
+  }
+}

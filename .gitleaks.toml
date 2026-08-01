@@ -1,0 +1,51 @@
+title = "Studio OS — secret scanning"
+
+[extend]
+useDefault = true
+
+# Project-specific rules on top of the gitleaks defaults.
+[[rules]]
+id = "supabase-service-role-key"
+description = "Supabase service_role JWT (full bypass of RLS — must never leave the server)"
+regex = '''eyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}'''
+tags = ["supabase", "jwt"]
+
+[[rules]]
+id = "supabase-secret-key"
+description = "Supabase secret API key (sb_secret_...)"
+regex = '''sb_secret_[A-Za-z0-9_-]{20,}'''
+tags = ["supabase"]
+
+[[rules]]
+id = "anthropic-api-key"
+description = "Anthropic API key"
+regex = '''sk-ant-[A-Za-z0-9_\-]{20,}'''
+tags = ["anthropic"]
+
+[[rules]]
+id = "meta-access-token"
+description = "Meta / Facebook Graph API access token"
+regex = '''EAA[A-Za-z0-9]{60,}'''
+tags = ["meta"]
+
+[[rules]]
+id = "postgres-connection-string"
+description = "Postgres connection string with an inline password"
+regex = '''postgres(ql)?://[^:\s]+:[^@\s]+@[^\s/]+'''
+tags = ["database"]
+
+[allowlist]
+description = "Fixtures, local-only defaults and lockfiles"
+paths = [
+  '''pnpm-lock\.yaml''',
+  '''\.gitleaks\.toml''',
+  '''supabase/\.temp/''',
+  '''docs/security\.md''',
+]
+regexes = [
+  # supabase start prints these well-known demo keys; they are public by design
+  # and only ever valid against 127.0.0.1.
+  '''postgres(ql)?://postgres:postgres@(127\.0\.0\.1|localhost)''',
+  '''your-[a-z-]+-here''',
+  '''<[A-Z_]+>''',
+]

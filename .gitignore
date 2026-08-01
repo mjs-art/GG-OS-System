@@ -1,0 +1,39 @@
+# dependencies
+/node_modules
+/.pnp
+.pnp.*
+
+# next.js
+/.next/
+/out/
+/build
+next-env.d.ts
+*.tsbuildinfo
+
+# testing
+/coverage
+/test-results
+/playwright-report
+/blob-report
+/playwright/.cache
+
+# env — NEVER commit. See .env.example for the contract.
+.env
+.env.*
+!.env.example
+
+# supabase local stack
+/supabase/.temp
+/supabase/.branches
+/supabase/logs
+
+# conductor workspace scratch (agent-to-agent, not product code)
+/.context
+
+# misc
+.DS_Store
+*.pem
+*-debug.log*
+.vercel
+.idea
+.claude/settings.local.json
