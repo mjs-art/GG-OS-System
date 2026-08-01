@@ -24,11 +24,22 @@ jobs:
     steps:
       - uses: actions/checkout@v5
         with:
-          fetch-depth: 0 # gitleaks needs history to scan the whole diff
-      - name: gitleaks
-        uses: gitleaks/gitleaks-action@v2
-        env:
-          GITLEAKS_CONFIG: .gitleaks.toml
+          fetch-depth: 0 # gitleaks escanea toda la historia, no solo el diff
+      # Se usa el binario directo y no gitleaks-action a propósito: la action
+      # exige GITHUB_TOKEN para escanear PRs, arrastra un aviso de licencia y
+      # corre sobre una versión de Node ya deprecada. Esto hace lo mismo, con
+      # la misma config que el pre-commit, y sin partes móviles.
+      - name: Instalar gitleaks
+        run: |
+          # Fijada a propósito, y a la misma que corre el pre-commit local:
+          # si CI y tu máquina escanean con versiones distintas, un hallazgo
+          # aparece hasta el PR y no cuando lo escribiste.
+          VERSION=8.30.1
+          curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${VERSION}/gitleaks_${VERSION}_linux_x64.tar.gz" \
+            | tar -xz -C /usr/local/bin gitleaks
+          gitleaks version
+      - name: Escanear
+        run: gitleaks detect --no-banner --redact --config .gitleaks.toml --verbose
 
   quality:
     name: Typecheck, lint, formato y pruebas
@@ -46,6 +57,14 @@ jobs:
       - run: pnpm format:check
       - run: pnpm test
       - run: pnpm build
+        # `src/lib/env.ts` valida la config al importarse, así que el build
+        # exige estas dos. Son valores de relleno: el build no habla con
+        # Supabase, solo necesita que la validación pase. Las llaves de verdad
+        # viven en Vercel.
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://ci.placeholder.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-placeholder-anon-key
+          NEXT_PUBLIC_SITE_URL: http://localhost:3000
 
   database:
     name: Migraciones y RLS
