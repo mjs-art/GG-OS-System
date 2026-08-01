@@ -1,6 +1,8 @@
 import type { Metadata, Viewport } from 'next'
 import { Archivo, IBM_Plex_Mono, Inter_Tight } from 'next/font/google'
 import { HydrationMarker } from '@/components/hydration-marker'
+import { colorSchemeDe, themeColorDe } from '@/domain/tema'
+import { leerTema } from '@/lib/tema'
 import './globals.css'
 
 /**
@@ -40,18 +42,35 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 }
 
-export const viewport: Viewport = {
-  themeColor: '#121110',
-  colorScheme: 'dark',
+/**
+ * El viewport depende del tema, así que se genera por petición en vez de ser
+ * una constante.
+ *
+ * `colorScheme` no es cosmético: es lo que le dice al navegador de qué color
+ * pintar los controles nativos, las barras de scroll y el autocompletado. Con
+ * el valor equivocado, un input en tema claro sale con fondo oscuro del
+ * sistema y se ve roto sin que ninguna regla nuestra falle.
+ */
+export async function generateViewport(): Promise<Viewport> {
+  const tema = await leerTema()
+  return {
+    themeColor: themeColorDe(tema),
+    colorScheme: colorSchemeDe(tema),
+  }
 }
 
-export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  const tema = await leerTema()
+
   return (
     <html
       lang="es-MX"
+      // El tema se resuelve en el servidor: el HTML sale ya con el atributo
+      // puesto y nunca hay un pintado con el tema equivocado.
+      data-tema={tema}
       className={`${archivo.variable} ${interTight.variable} ${plexMono.variable} h-full antialiased`}
     >
-      <body className="bg-ink text-bone flex min-h-full flex-col">
+      <body className="bg-bg text-fg flex min-h-full flex-col">
         {children}
         <HydrationMarker />
       </body>

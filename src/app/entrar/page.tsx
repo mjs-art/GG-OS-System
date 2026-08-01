@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import { Display, Mono } from '@/components/ui/primitives'
+import { SwitchTema } from '@/components/ui/switch-tema'
 import { FormularioEntrar } from './formulario'
 
 export const metadata: Metadata = {
@@ -19,14 +20,22 @@ export default async function EntrarPage({
         <Display as="h1" className="text-4xl">
           Studio OS
         </Display>
-        <Mono className="text-muted">Acceso por correo</Mono>
+        <Mono className="text-fg-muted">Acceso por correo</Mono>
       </header>
 
       <FormularioEntrar destino={destino} />
 
-      <p className="text-muted text-[13px]">
+      <p className="text-fg-muted text-[13px]">
         No hay contraseña. Escribe tu correo y te llega un link para entrar.
       </p>
+
+      {/* El switch también vive aquí, antes de la sesión: la preferencia es del
+          dispositivo, no de la cuenta, y esta pantalla se abre tanto de noche
+          como en una cocina a las siete de la mañana. */}
+      <div className="border-line flex items-center justify-between gap-4 border-t pt-6">
+        <Mono className="text-fg-muted">Tema</Mono>
+        <SwitchTema />
+      </div>
     </main>
   )
 }

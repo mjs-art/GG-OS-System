@@ -2,59 +2,89 @@
 
 /* ==========================================================================
    Studio OS — sistema de diseño
-   Editorial oscuro, densidad de sala de control.
+   Editorial, densidad de sala de control.
 
    Reglas que no se rompen:
      · Cero sombras. La jerarquía se construye con espacio y peso tipográfico.
-     · Todos los bordes son hairline de 1px en --line.
+     · Todos los bordes son hairline de 1px en --color-line.
      · border-radius 2px en todo.
      · Nada de gradientes, glassmorphism ni "glow".
 
    Los colores literales van AQUÍ y en ningún otro lado. En los componentes se
-   usan las utilidades derivadas de estos tokens (bg-ink-2, text-bone,
+   usan las utilidades derivadas de estos tokens (bg-surface, text-fg,
    border-line…), nunca un hex suelto.
+
+   --------------------------------------------------------------------------
+   PALETA OFICIAL DE ANA GZ STUDIO — entregada el 2026-08-01
+
+     #630000  oxblood profundo
+     #810100  rojo
+     #1B1717  negro cálido
+     #EDEBDD  crema
+
+   Son cuatro. El sistema necesita ocho por tema, así que hairlines,
+   superficies elevadas, hover y texto secundario están DERIVADOS de esos
+   cuatro. Cada derivado lleva un comentario que dice de dónde sale.
+   --------------------------------------------------------------------------
+
+   DOS TEMAS. Los nombres de los tokens son ROLES (bg, surface, fg, accent), no
+   colores. Eso es a propósito: `--color-ink` significando "el fondo" deja de
+   tener sentido en cuanto el fondo es crema. Un componente pide el rol y el
+   tema decide el color.
+
+   `@theme` = tema oscuro (el default).
+   El bloque `[data-tema='claro']` de más abajo redefine los mismos tokens.
+
+   `static` obliga a Tailwind a emitir todas las variables aunque no detecte la
+   utilidad en el código. Sin eso, un token que solo se usa desde CSS
+   desaparece del bundle y el tema claro se rompe a la mitad, en silencio.
    ========================================================================== */
 
-@theme {
-  /* --- Superficies y texto ---------------------------------------------- */
-  --color-ink: #121110; /* fondo — negro cálido, NO negro puro */
-  --color-ink-2: #1c1a18; /* superficies, cards */
-  --color-ink-3: #24211e; /* hover */
-  --color-line: #2e2a26; /* hairlines */
-  --color-bone: #ede9e3; /* texto principal */
-  --color-muted: #8b837a; /* labels, texto secundario */
+@theme static {
+  /* --- Superficies y texto ------------------------------------------------ */
+  --color-bg: #1b1717; /* oficial */
+  --color-surface: #231e1e; /* derivado: #1B1717 +8 de luz */
+  --color-surface-2: #2c2626; /* derivado: hover */
+  --color-line: #3a3232; /* derivado: hairline */
+  --color-fg: #edebdd; /* oficial */
+  --color-fg-muted: #8f8b80; /* derivado: crema y negro a medio camino */
 
-  /* --- Acento ------------------------------------------------------------ */
-  --color-burnt: #8e2b1e; /* rojo quemado */
-  --color-burnt-hot: #c3462f; /* hover, focus, activo */
+  /* --- Acento -------------------------------------------------------------- */
+  --color-accent: #810100; /* oficial */
+  /* DERIVADO, y aquí está el porqué: el #810100 oficial sobre el #1B1717
+     oficial da 1.6:1 de contraste. WCAG pide 3:1 para un indicador de foco, o
+     sea que el rojo de marca es literalmente invisible como anillo de foco en
+     oscuro. Este rojo aclarado da 3.5:1. En tema claro no hace falta y por eso
+     allá `accent-hot` sí es un color oficial. */
+  --color-accent-hot: #c9382b;
+  /* Texto sobre el acento. Es el MISMO crema en los dos temas y ese es el
+     punto: el fondo del botón primario es rojo oscuro siempre, así que su
+     texto no puede seguir a `fg` — en tema claro `fg` es casi negro y el botón
+     queda ilegible. Este bug existió de verdad y así se arregló. */
+  --color-on-accent: #edebdd;
 
-  /* --- Semánticos, desaturados a propósito ------------------------------- */
-  --color-critical: #c3462f;
+  /* --- Semánticos, desaturados a propósito --------------------------------- */
+  --color-critical: #c9382b;
   --color-high: #a67c52;
   --color-medium: #8a7b4f;
-  --color-ok: #5f6b5a;
+  --color-ok: #6d7a66;
 
-  /* --- Pilares de contenido ---------------------------------------------- */
-  --color-pillar-1: #8e2b1e;
+  /* --- Pilares de contenido ------------------------------------------------- */
+  /* No son tema ni marca: son la taxonomía de contenido del cliente y se ven
+     igual en los dos temas. Por eso no aparecen en el bloque claro. */
+  --color-pillar-1: #810100;
   --color-pillar-2: #a67c52;
   --color-pillar-3: #5f6b5a;
   --color-pillar-4: #4a5568;
   --color-pillar-5: #7a5c6e;
   --color-pillar-6: #8a7b4f;
 
-  /* --- Modo cliente: paleta invertida ------------------------------------ */
-  /* El acento del modo cliente es el color de marca DEL CLIENTE, inyectado en
-     runtime como --color-client-brand. Nunca el rojo quemado del estudio. */
-  --color-paper: #f7f5f2;
-  --color-paper-2: #ffffff;
-  --color-paper-line: #e0dbd4;
-
-  /* --- Tipografía --------------------------------------------------------- */
+  /* --- Tipografía ----------------------------------------------------------- */
   --font-display: var(--font-archivo), ui-sans-serif, system-ui, sans-serif;
   --font-sans: var(--font-inter-tight), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-plex-mono), ui-monospace, monospace;
 
-  /* --- Radio: 2px en todo -------------------------------------------------- */
+  /* --- Radio: 2px en todo ----------------------------------------------------- */
   --radius-xs: 2px;
   --radius-sm: 2px;
   --radius-md: 2px;
@@ -63,6 +93,40 @@
 }
 
 @layer base {
+  /* ========================================================================
+     TEMA CLARO
+
+     El selector es SOLO el atributo, sin `html` adelante. Es deliberado y hay
+     que dejarlo así: el portal de cliente (`/aprobar`) va a envolver su árbol
+     en un `<div data-tema="claro">` para quedar fijo en claro sin importar la
+     cookie del estudio. Si alguien lo escribe `html[data-tema='claro']`, esa
+     anidación deja de funcionar y el cliente ve el tema de Ana.
+     `tokens.test.ts` falla si el selector se escopa a html.
+
+     Va en @layer base y no suelto porque Tailwind ordena las capas
+     theme → base → components → utilities: aquí gana sobre el @theme de
+     arriba sin pelear especificidad.
+     ======================================================================== */
+  [data-tema='claro'] {
+    --color-bg: #edebdd; /* oficial */
+    --color-surface: #f4f2e8; /* derivado: crema +4 de luz */
+    --color-surface-2: #e2dfcd; /* derivado: hover, crema −4 */
+    --color-line: #cfcbb6; /* derivado: hairline */
+    --color-fg: #1b1717; /* oficial */
+    --color-fg-muted: #6f6a63; /* derivado */
+
+    --color-accent: #810100; /* oficial — 9:1 sobre el crema */
+    --color-accent-hot: #630000; /* oficial — aquí sí alcanza (11:1) */
+    --color-on-accent: #edebdd; /* igual que en oscuro, a propósito */
+
+    /* Los semánticos del tema oscuro están aclarados para leerse sobre negro.
+       Sobre crema se lavan, así que cada uno baja de luz hasta pasar 4.5:1. */
+    --color-critical: #a32b1e;
+    --color-high: #7a5426;
+    --color-medium: #6b5c2e;
+    --color-ok: #43503e;
+  }
+
   *,
   *::before,
   *::after {
@@ -75,7 +139,7 @@
        al lienzo — y WebKit, al hacerlo, deja el body reportando
        `rgba(0,0,0,0)`. Declararlo en html evita esa ambigüedad, hace explícito
        el color de la página, y quita el flash blanco al hacer overscroll. */
-    background-color: var(--color-ink);
+    background-color: var(--color-bg);
     scroll-behavior: smooth;
     /* La navegación por anclas no debe meter el título bajo el header sticky. */
     scroll-padding-top: 5.5rem;
@@ -83,8 +147,8 @@
   }
 
   body {
-    background-color: var(--color-ink);
-    color: var(--color-bone);
+    background-color: var(--color-bg);
+    color: var(--color-fg);
     font-family: var(--font-sans);
     font-size: 14px;
     line-height: 1.5;
@@ -95,7 +159,7 @@
   /* Foco visible siempre. Quitar el outline sin poner otro es un bug de
      accesibilidad, no una decisión de diseño. */
   :focus-visible {
-    outline: 2px solid var(--color-burnt-hot);
+    outline: 2px solid var(--color-accent-hot);
     outline-offset: 2px;
     border-radius: 2px;
   }
@@ -104,8 +168,8 @@
   }
 
   ::selection {
-    background-color: var(--color-burnt);
-    color: var(--color-bone);
+    background-color: var(--color-accent);
+    color: var(--color-on-accent);
   }
 
   * {
@@ -166,7 +230,7 @@
   html,
   body {
     background: #ffffff !important;
-    color: #121110 !important;
+    color: #1b1717 !important;
   }
   [data-print='hide'] {
     display: none !important;

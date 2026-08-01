@@ -1,4 +1,19 @@
-import { expect, test } from '@playwright/test'
+import { expect, test, type Page } from '@playwright/test'
+import { TEMA_COOKIE } from '../src/domain/tema'
+
+/** #1B1717, el negro cálido oficial: el fondo del tema oscuro. */
+const OSCURO = 'rgb(27, 23, 23)'
+/** #EDEBDD, el crema oficial: el fondo del tema claro. */
+const CLARO = 'rgb(237, 235, 221)'
+
+/**
+ * Se mide en `html` y no en `body`: cuando el html es transparente el
+ * navegador propaga el fondo del body al lienzo, y WebKit deja entonces el
+ * body reportando rgba(0,0,0,0). En html el valor es el mismo en los dos
+ * motores.
+ */
+const fondo = (page: Page) =>
+  page.evaluate(() => getComputedStyle(document.documentElement).backgroundColor)
 
 /**
  * Humo de la etapa 0.
@@ -35,7 +50,14 @@ test('un correo mal escrito no manda nada y lo dice', async ({ page }) => {
 
   // novalidate para saltarnos la validación del navegador y ejercitar la del
   // servidor, que es la que de verdad importa.
-  await page.locator('form').evaluate((form) => form.setAttribute('novalidate', 'true'))
+  //
+  // Se ancla al form que contiene el campo de correo y no a `form` a secas:
+  // el switch de tema también es un form (a propósito, para no mandar
+  // JavaScript al cliente) y un selector suelto se vuelve ambiguo.
+  await page
+    .locator('form')
+    .filter({ has: page.getByLabel('Correo') })
+    .evaluate((form) => form.setAttribute('novalidate', 'true'))
   await page.getByLabel('Correo').fill('esto-no-es-correo')
   await page.waitForFunction(() => document.body.dataset['hidratado'] === '1')
   await page.getByRole('button', { name: 'Mandar link' }).click()
@@ -112,17 +134,102 @@ test('el sistema de diseño cargó', async ({ page }) => {
   // Fondo negro cálido, no negro puro. Si esto falla es que los tokens no
   // llegaron y toda la app se ve genérica.
   //
-  // Se mide en `html` y no en `body`: cuando el html es transparente el
-  // navegador propaga el fondo del body al lienzo, y WebKit deja entonces el
-  // body reportando rgba(0,0,0,0). En html el valor es el mismo en los dos
-  // motores.
-  const background = await page.evaluate(
-    () => getComputedStyle(document.documentElement).backgroundColor,
-  )
-  expect(background).toBe('rgb(18, 17, 16)')
+  // Sin cookie de tema, el default es oscuro.
+  expect(await fondo(page)).toBe(OSCURO)
 
   const heading = page.getByRole('heading', { name: 'Studio OS', level: 1 })
   await expect(heading).toHaveCSS('text-transform', 'uppercase')
+})
+
+test('el switch cambia el tema y la preferencia sobrevive la navegación', async ({ page }) => {
+  await page.goto('/entrar')
+  expect(await fondo(page)).toBe(OSCURO)
+
+  await page.waitForFunction(() => document.body.dataset['hidratado'] === '1')
+  await page.getByRole('button', { name: 'Cambiar a tema claro' }).click()
+
+  await expect(page.locator('html')).toHaveAttribute('data-tema', 'claro')
+  expect(await fondo(page)).toBe(CLARO)
+
+  // La preferencia es una cookie, no estado de React: tiene que seguir puesta
+  // después de una carga completa desde el servidor.
+  await page.reload()
+  expect(await fondo(page)).toBe(CLARO)
+
+  // Y de regreso.
+  await page.getByRole('button', { name: 'Cambiar a tema oscuro' }).click()
+  await expect(page.locator('html')).toHaveAttribute('data-tema', 'oscuro')
+  expect(await fondo(page)).toBe(OSCURO)
+})
+
+test('el tema se resuelve en el servidor: no hay pintado con el tema equivocado', async ({
+  page,
+  baseURL,
+  context,
+}) => {
+  await context.addCookies([{ name: TEMA_COOKIE, value: 'claro', url: baseURL ?? '' }])
+
+  // `domcontentloaded` y no `load`: se mira el HTML tal como llegó, antes de
+  // que la app corra JavaScript. Si el atributo se pusiera desde el cliente,
+  // aquí todavía no estaría — y eso es exactamente el flashazo.
+  await page.goto('/entrar', { waitUntil: 'domcontentloaded' })
+
+  await expect(page.locator('html')).toHaveAttribute('data-tema', 'claro')
+})
+
+test('una cookie de tema con basura cae al default, no se escribe en el DOM', async ({
+  page,
+  baseURL,
+  context,
+}) => {
+  await context.addCookies([{ name: TEMA_COOKIE, value: 'sepia"><script>', url: baseURL ?? '' }])
+
+  await page.goto('/entrar')
+
+  await expect(page.locator('html')).toHaveAttribute('data-tema', 'oscuro')
+  expect(await fondo(page)).toBe(OSCURO)
+})
+
+test('cada tema tiene su propio color de foco', async ({ page, baseURL, context }) => {
+  // El rojo oficial #810100 da 1.6:1 sobre el negro oficial #1B1717: como
+  // anillo de foco en tema oscuro es invisible, y WCAG pide 3:1. Por eso el
+  // tema oscuro usa un rojo derivado más claro y el claro sí usa uno oficial.
+  // Esta prueba es lo que impide que alguien lo "corrija" de regreso al color
+  // de marca sin darse cuenta de que rompe la accesibilidad.
+  //
+  // Se compara en hex y no en rgb() porque una custom property se devuelve tal
+  // como está escrita en el CSS: el navegador no la resuelve hasta que se usa.
+  const esperado = {
+    oscuro: '#c9382b', // derivado, para alcanzar 3:1 sobre el negro
+    claro: '#630000', // oficial, 11:1 sobre el crema
+  } as const
+
+  for (const tema of ['oscuro', 'claro'] as const) {
+    await context.clearCookies()
+    await context.addCookies([{ name: TEMA_COOKIE, value: tema, url: baseURL ?? '' }])
+    await page.goto('/entrar')
+
+    const color = await page.evaluate(() =>
+      getComputedStyle(document.documentElement).getPropertyValue('--color-accent-hot').trim(),
+    )
+    expect(color, `--color-accent-hot en tema ${tema}`).toBe(esperado[tema])
+  }
+})
+
+test('el botón primario se lee en los dos temas', async ({ page, baseURL, context }) => {
+  // Regresión de verdad: el botón primario usaba `text-fg`, que en tema claro
+  // es casi negro. Sobre el rojo oscuro del fondo quedaba ilegible y ninguna
+  // prueba lo notaba — se descubrió mirando una captura. Por eso existe el
+  // token `on-accent`, que es el mismo crema en los dos temas.
+  for (const tema of ['oscuro', 'claro'] as const) {
+    await context.clearCookies()
+    await context.addCookies([{ name: TEMA_COOKIE, value: tema, url: baseURL ?? '' }])
+    await page.goto('/entrar')
+
+    const boton = page.getByRole('button', { name: 'Mandar link' })
+    await expect(boton, `color del texto en tema ${tema}`).toHaveCSS('color', 'rgb(237, 235, 221)')
+    await expect(boton, `fondo en tema ${tema}`).toHaveCSS('background-color', 'rgb(129, 1, 0)')
+  }
 })
 
 test('el foco se ve al navegar con teclado', async ({ page }) => {

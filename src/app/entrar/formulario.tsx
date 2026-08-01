@@ -13,7 +13,7 @@ export function FormularioEntrar({ destino }: { destino: string | undefined }) {
     return (
       <Card>
         <Mono className="text-ok">Revisa tu correo</Mono>
-        <p className="text-bone mt-3 text-[13px]">{state.message}</p>
+        <p className="text-fg mt-3 text-[13px]">{state.message}</p>
       </Card>
     )
   }
@@ -23,7 +23,7 @@ export function FormularioEntrar({ destino }: { destino: string | undefined }) {
       {destino && <input type="hidden" name="destino" value={destino} />}
 
       <div className="flex flex-col gap-2">
-        <Mono as="label" className="text-muted" {...{ htmlFor: 'email' }}>
+        <Mono as="label" className="text-fg-muted" {...{ htmlFor: 'email' }}>
           Correo
         </Mono>
         <input
@@ -34,14 +34,14 @@ export function FormularioEntrar({ destino }: { destino: string | undefined }) {
           required
           disabled={pending}
           placeholder="tu@correo.com"
-          className="border-line bg-ink-2 text-bone placeholder:text-muted rounded-xs border px-3 py-2.5 text-[14px] disabled:opacity-50"
+          className="border-line bg-surface text-fg placeholder:text-fg-muted rounded-xs border px-3 py-2.5 text-[14px] disabled:opacity-50"
           {...(state.status === 'error' ? { 'aria-invalid': true } : {})}
           aria-describedby={state.status === 'error' ? 'email-error' : undefined}
         />
       </div>
 
       {state.status === 'error' && (
-        <Mono id="email-error" role="alert" className="text-burnt-hot">
+        <Mono id="email-error" role="alert" className="text-accent-hot">
           {state.message}
         </Mono>
       )}
