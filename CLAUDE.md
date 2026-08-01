@@ -117,22 +117,39 @@ Explican **por qué**, no qué. Un comentario que repite el código es ruido que
 
 ## Sistema de diseño
 
-> ⚠️ **La paleta actual es PROVISIONAL.** Los colores oficiales de Ana Gz Studio todavía no se entregan. Lo que hay hoy es la propuesta del plan v4 (editorial oscuro, rojo quemado). Cuando lleguen los definitivos, se cambian **solo** los valores del bloque `@theme` en `globals.css` y nada más.
->
-> Por eso los colores no se escriben en componentes, nunca. `src/components/ui/tokens.test.ts` hace fallar la suite si un hex, un `bg-gray-*` o una sombra se escapan a un componente. Esa prueba es lo que mantiene barato el cambio de marca — no la desactives.
+Editorial, densidad de sala de control. **No** dashboard corporativo, **no** SaaS genérico.
 
-Editorial oscuro, densidad de sala de control. **No** dashboard corporativo, **no** SaaS genérico.
+Los tokens viven en `src/app/globals.css` y las primitivas en `src/components/ui/primitives.tsx`. Detalle completo en `docs/design.md`.
 
-Los tokens viven en `src/app/globals.css` y las primitivas en `src/components/ui/primitives.tsx`.
+### La paleta oficial son cuatro colores
+
+`#630000` oxblood · `#810100` rojo · `#1B1717` negro cálido · `#EDEBDD` crema.
+
+Todo lo demás —hairlines, superficies, hover, texto secundario— está **derivado** de esos cuatro y lleva su comentario en el CSS diciendo de dónde sale. Si necesitas un color nuevo, se deriva ahí, no se inventa en el componente.
+
+### Dos temas, y los tokens se llaman por su rol
+
+`bg` · `surface` · `surface-2` · `line` · `fg` · `fg-muted` · `accent` · `accent-hot` · `on-accent`, más los semánticos `critical` · `high` · `medium` · `ok`.
+
+Se llaman por rol y no por color a propósito: `--color-ink` significando "el fondo" deja de tener sentido en cuanto el fondo es crema. El componente pide el rol; el tema decide el color.
+
+- `@theme static` en `globals.css` = tema **oscuro**, el default.
+- El bloque `[data-tema='claro']` redefine los mismos tokens.
+- La preferencia vive en una **cookie**, la lee el layout raíz en el servidor y sale ya puesta en `<html data-tema>`. Cero flashazo y cero JavaScript de cliente — el switch es un Server Action.
+- **Agregar un token es agregarlo a los dos temas.** `tokens.test.ts` falla si uno se queda atrás, si el tema claro inventa un token huérfano, o si alguien escopa el selector a `html[data-tema]` (eso rompería que `/aprobar` se ancle en claro anidando un `<div data-tema="claro">`).
+
+> ⚠️ El rojo oficial `#810100` da **1.6:1** sobre el negro oficial `#1B1717`. Como anillo de foco en tema oscuro es invisible y WCAG pide 3:1, así que ahí `accent-hot` es un rojo **derivado** (`#C9382B`). En tema claro sí es oficial (`#630000`, 11:1). Hay una prueba de Playwright que lo fija: si alguien lo "corrige" de vuelta al color de marca, falla.
+
+### Lo demás
 
 - **Cero sombras.** La jerarquía se construye con espacio y peso tipográfico.
 - Todos los bordes son hairline de 1px en `--color-line`. `border-radius: 2px` en todo.
 - Sin gradientes, sin glassmorphism, sin glow.
 - Tres tipografías con trabajos distintos: **Archivo** expandido en mayúsculas para display (nombres de cliente, títulos, números grandes) · **Inter Tight** para UI · **IBM Plex Mono** 11px para datos, fechas, labels y chips.
-- Foco visible en `--color-burnt-hot` en todo lo interactivo. Respeta `prefers-reduced-motion`.
+- Foco visible en `--color-accent-hot` en todo lo interactivo. Respeta `prefers-reduced-motion`.
 - Responsive hasta 375px.
 
-**Si vas a escribir un hex, un `border-gray-*` o una sombra en un componente de feature: para.** Falta una primitiva. Agrégala en `primitives.tsx`.
+**Si vas a escribir un hex, un `border-gray-*` o una sombra en un componente de feature: para.** Falta una primitiva. Agrégala en `primitives.tsx`. Un hex escrito a mano no solo rompe el cambio de marca: se queda idéntico cuando el fondo cambia de tema, y eso no se nota hasta que un cliente ve la captura.
 
 Los colores que sí son literales en runtime — el de cada pilar y el de marca del cliente — vienen de la base como **dato**, no como diseño, y entran por `style`. Eso está bien y la prueba no los toca porque mira el código fuente.
 

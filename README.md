@@ -42,6 +42,7 @@ La lista completa está en `CLAUDE.md`.
 | `docs/security.md`       | modelo de amenaza, controles y pendientes conocidos                 |
 | `docs/roadmap.md`        | el plan de ejecución por etapas                                     |
 | `docs/agents.md`         | los ocho agentes y sus contratos                                    |
+| `docs/design.md`         | la paleta, los dos temas y las reglas del sistema de diseño         |
 | `docs/design-sources.md` | de dónde sale el diseño y qué minar del proyecto de Lovable         |
 
 ## Estado

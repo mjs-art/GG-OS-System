@@ -67,12 +67,12 @@ export function Stat({
         {value}
       </Display>
       <div className="flex items-baseline gap-2">
-        <Mono className="text-muted">{label}</Mono>
+        <Mono className="text-fg-muted">{label}</Mono>
         {delta && (
           <Mono
             className={cn(
-              trend === 'flat' && 'text-muted',
-              trend !== 'flat' && (good ? 'text-ok' : 'text-burnt-hot'),
+              trend === 'flat' && 'text-fg-muted',
+              trend !== 'flat' && (good ? 'text-ok' : 'text-accent-hot'),
             )}
           >
             {trend === 'up' ? '↑' : trend === 'down' ? '↓' : '·'} {delta}
@@ -86,7 +86,9 @@ export function Stat({
 /* --- Superficies ---------------------------------------------------------- */
 
 export function Card({ className, ...props }: ComponentProps<'div'>) {
-  return <div className={cn('border-line bg-ink-2 rounded-xs border p-5', className)} {...props} />
+  return (
+    <div className={cn('border-line bg-surface rounded-xs border p-5', className)} {...props} />
+  )
 }
 
 export function Divider({ className, ...props }: ComponentProps<'hr'>) {
@@ -111,7 +113,7 @@ export function SectionHeader({
           <Display as="h2" className="text-xl">
             {title}
           </Display>
-          {hint && <p className="text-muted mt-1 text-[13px]">{hint}</p>}
+          {hint && <p className="text-fg-muted mt-1 text-[13px]">{hint}</p>}
         </div>
         {action}
       </div>
@@ -124,15 +126,15 @@ export function SectionHeader({
 export type ChipTone = 'neutral' | 'accent' | 'critical' | 'high' | 'medium' | 'ok' | 'agent'
 
 const CHIP_TONES: Record<ChipTone, string> = {
-  neutral: 'border-line text-muted',
-  accent: 'border-burnt text-burnt-hot',
+  neutral: 'border-line text-fg-muted',
+  accent: 'border-accent text-accent-hot',
   critical: 'border-critical/50 text-critical',
   high: 'border-high/50 text-high',
   medium: 'border-medium/50 text-medium',
   ok: 'border-ok/50 text-ok',
   // Todo lo escrito por un agente lleva este chip. Nunca se oculta la
   // procedencia dentro del estudio: el modo cliente sí lo omite por completo.
-  agent: 'border-line bg-ink-3 text-muted',
+  agent: 'border-line bg-surface-2 text-fg-muted',
 }
 
 export function Chip({
@@ -173,7 +175,7 @@ export function StatusDot({
   label: string
   size?: number
 }) {
-  const color = status === 'ok' ? 'bg-ok' : status === 'warn' ? 'bg-high' : 'bg-burnt-hot'
+  const color = status === 'ok' ? 'bg-ok' : status === 'warn' ? 'bg-high' : 'bg-accent-hot'
   return (
     <span className="inline-flex items-center gap-2">
       <span
@@ -198,17 +200,19 @@ export function Button({
       className={cn(
         'type-mono inline-flex items-center gap-2 rounded-xs px-3 py-2 transition-colors duration-150 ease-out',
         'disabled:cursor-not-allowed disabled:opacity-40',
-        variant === 'primary' && 'bg-burnt text-bone hover:bg-burnt-hot',
-        variant === 'secondary' && 'border-line text-bone hover:bg-ink-3 border',
-        variant === 'ghost' && 'text-muted hover:text-bone',
+        // `text-on-accent` y no `text-fg`: el fondo es rojo oscuro en los dos
+        // temas, así que el texto no puede seguir al tema.
+        variant === 'primary' && 'bg-accent text-on-accent hover:bg-accent-hot',
+        variant === 'secondary' && 'border-line text-fg hover:bg-surface-2 border',
+        variant === 'ghost' && 'text-fg-muted hover:text-fg',
         // Botón que dispara un agente. El asterisco es la marca de "esto lo
         // escribe una máquina y tú lo revisas".
-        variant === 'agent' && 'border-line text-bone hover:bg-ink-3 border',
+        variant === 'agent' && 'border-line text-fg hover:bg-surface-2 border',
         className,
       )}
       {...props}
     >
-      {variant === 'agent' && <span aria-hidden className="bg-burnt-hot size-1.5 rounded-full" />}
+      {variant === 'agent' && <span aria-hidden className="bg-accent-hot size-1.5 rounded-full" />}
       {props.children}
     </button>
   )
@@ -232,7 +236,7 @@ export function EmptyState({
   return (
     <div className="border-line flex flex-col items-start gap-3 rounded-xs border border-dashed p-8">
       <Display className="text-lg">{title}</Display>
-      <p className="text-muted max-w-prose text-[13px]">{body}</p>
+      <p className="text-fg-muted max-w-prose text-[13px]">{body}</p>
       {action}
     </div>
   )
@@ -242,12 +246,12 @@ export function EmptyState({
 export function ProgressBar({
   value,
   max,
-  tone = 'burnt',
+  tone = 'accent',
   className,
 }: {
   value: number
   max: number
-  tone?: 'burnt' | 'ok' | 'muted'
+  tone?: 'accent' | 'ok' | 'muted'
   className?: string
 }) {
   const pct = max > 0 ? Math.min(100, Math.max(0, (value / max) * 100)) : 0
@@ -262,9 +266,9 @@ export function ProgressBar({
       <div
         className={cn(
           'h-full transition-[width] duration-150 ease-out',
-          tone === 'burnt' && 'bg-burnt',
+          tone === 'accent' && 'bg-accent',
           tone === 'ok' && 'bg-ok',
-          tone === 'muted' && 'bg-muted',
+          tone === 'muted' && 'bg-fg-muted',
         )}
         style={{ width: `${pct}%` }}
       />

@@ -6,15 +6,21 @@ El diseño vive **en este repo**: los tokens en `src/app/globals.css`, las primi
 
 Nada se sincroniza desde afuera. Las herramientas de diseño se usan para **explorar**, y lo que se decide se implementa aquí a mano.
 
-## La paleta es provisional
+## La paleta ya llegó
 
-Los colores oficiales de Ana Gz Studio no se han entregado. Lo que hay hoy es la propuesta del plan v4: editorial oscuro (`#121110`) con rojo quemado (`#8E2B1E`), radius 2px, cero sombras, Archivo Expanded.
+Ana entregó los cuatro colores oficiales el 1 de agosto de 2026 (`#630000` · `#810100` · `#1B1717` · `#EDEBDD`) y con ellos se armaron los dos temas. La especificación completa —qué es oficial, qué está derivado, y por qué el rojo de marca no sirve como anillo de foco en oscuro— está en [`design.md`](./design.md).
 
-Cambiarla cuando lleguen los definitivos es editar el bloque `@theme` de `globals.css`. Nada más — y eso está garantizado por `src/components/ui/tokens.test.ts`, que falla si un color literal, una utilidad de la paleta default de Tailwind o una sombra se escapan a un componente.
+Aplicarla costó editar `globals.css` y renombrar los tokens a nombres de rol. Nada de eso tocó un componente de feature, que era justamente la apuesta. Lo garantiza `src/components/ui/tokens.test.ts`, que falla si un color literal, una utilidad de la paleta default de Tailwind o una sombra se escapan a un componente.
 
-Esa prueba **se verificó que falla de verdad**: se le metió un `bg-gray-800 shadow-lg` a propósito y los reportó con nombre de archivo. Un guardián que nunca falla no es un guardián.
+Esa prueba **se verificó que falla de verdad**: se le metió un `bg-gray-800 shadow-lg` a propósito y los reportó con nombre de archivo. Los guardianes nuevos de sincronía entre temas se verificaron igual, rompiendo el CSS a mano. Un guardián que nunca falla no es un guardián.
 
 Lo que sí puede ser color literal en runtime: el de cada pilar y el de marca del cliente. Vienen de la base como dato, entran por `style`, y no son decisiones de diseño.
+
+Lo que **no** llegó todavía: la licencia web de Meno Banner. La dirección tipográfica que Ana mandó junto con los colores está pendiente por eso; el detalle está en `design.md`.
+
+### El preview de las variantes
+
+`.context/preview-paleta.html` (fuera de git) tiene la Bandeja maquetada con datos ficticios en tres variantes —oscuro, crema, y crema con Meno Banner— y un switch vivo. Sirve para discutir dirección visual sin tocar la app. No es fuente de verdad de nada.
 
 ## El proyecto de Lovable
 
