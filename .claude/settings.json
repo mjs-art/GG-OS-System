@@ -1,0 +1,44 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pnpm typecheck)",
+      "Bash(pnpm lint)",
+      "Bash(pnpm lint:fix)",
+      "Bash(pnpm format)",
+      "Bash(pnpm format:check)",
+      "Bash(pnpm test)",
+      "Bash(pnpm test:*)",
+      "Bash(pnpm verify)",
+      "Bash(pnpm build)",
+      "Bash(pnpm install)",
+      "Bash(pnpm db:*)",
+      "Bash(pnpm exec supabase status:*)",
+      "Bash(pnpm exec supabase test db:*)",
+      "Bash(pnpm exec supabase db lint:*)",
+      "Bash(pnpm exec supabase gen types:*)",
+      "Bash(pnpm exec tsc:*)",
+      "Bash(pnpm exec eslint:*)",
+      "Bash(pnpm exec prettier:*)",
+      "Bash(pnpm exec vitest:*)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git show:*)",
+      "Bash(git branch:*)",
+      "Bash(gitleaks detect:*)",
+      "Bash(gitleaks protect:*)"
+    ],
+    "ask": [
+      "Bash(pnpm exec supabase db push:*)",
+      "Bash(pnpm exec supabase link:*)",
+      "Bash(git push:*)",
+      "Bash(gh pr create:*)"
+    ],
+    "deny": [
+      "Read(./.env)",
+      "Read(./.env.local)",
+      "Read(./.env.*.local)",
+      "Bash(pnpm exec supabase db reset --linked:*)"
+    ]
+  }
+}
