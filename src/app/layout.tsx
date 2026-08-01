@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next'
 import { Archivo, IBM_Plex_Mono, Inter_Tight } from 'next/font/google'
+import { HydrationMarker } from '@/components/hydration-marker'
 import './globals.css'
 
 /**
@@ -50,7 +51,10 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       lang="es-MX"
       className={`${archivo.variable} ${interTight.variable} ${plexMono.variable} h-full antialiased`}
     >
-      <body className="bg-ink text-bone flex min-h-full flex-col">{children}</body>
+      <body className="bg-ink text-bone flex min-h-full flex-col">
+        {children}
+        <HydrationMarker />
+      </body>
     </html>
   )
 }

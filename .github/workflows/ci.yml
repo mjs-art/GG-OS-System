@@ -98,7 +98,11 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm exec playwright install --with-deps chromium
+      # WebKit no es opcional: el proyecto `mobile` emula un iPhone y el portal
+      # de cliente es mobile-first — los clientes lo van a abrir en Safari.
+      # Emular móvil sobre Chromium daría confianza falsa justo en la
+      # superficie que más importa.
+      - run: pnpm exec playwright install --with-deps chromium webkit
       - run: pnpm test:e2e
         env:
           # e2e runs against the mock data layer; no real credentials in CI.

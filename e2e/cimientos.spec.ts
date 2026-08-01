@@ -37,6 +37,7 @@ test('un correo mal escrito no manda nada y lo dice', async ({ page }) => {
   // servidor, que es la que de verdad importa.
   await page.locator('form').evaluate((form) => form.setAttribute('novalidate', 'true'))
   await page.getByLabel('Correo').fill('esto-no-es-correo')
+  await page.waitForFunction(() => document.body.dataset['hidratado'] === '1')
   await page.getByRole('button', { name: 'Mandar link' }).click()
 
   await expect(page.getByRole('alert')).toBeVisible()
@@ -52,6 +53,18 @@ test('las cabeceras de seguridad están puestas', async ({ page }) => {
   expect(headers['content-security-policy']).toContain("frame-ancestors 'none'")
   expect(headers['content-security-policy']).toContain("object-src 'none'")
   expect(headers['x-powered-by']).toBeUndefined()
+
+  // Regresión: `upgrade-insecure-requests` sobre http rompe la app entera en
+  // WebKit — reescribe los assets a https, el TLS falla contra un servidor
+  // plano, y la página se queda sin CSS y sin JavaScript. Chromium exenta
+  // localhost y por eso no se ve ahí. La directiva solo debe salir cuando de
+  // verdad servimos por TLS.
+  const overTls = new URL(page.url()).protocol === 'https:'
+  if (overTls) {
+    expect(headers['content-security-policy']).toContain('upgrade-insecure-requests')
+  } else {
+    expect(headers['content-security-policy']).not.toContain('upgrade-insecure-requests')
+  }
 })
 
 test('no se indexa', async ({ page }) => {
@@ -64,7 +77,14 @@ test('el sistema de diseño cargó', async ({ page }) => {
 
   // Fondo negro cálido, no negro puro. Si esto falla es que los tokens no
   // llegaron y toda la app se ve genérica.
-  const background = await page.evaluate(() => getComputedStyle(document.body).backgroundColor)
+  //
+  // Se mide en `html` y no en `body`: cuando el html es transparente el
+  // navegador propaga el fondo del body al lienzo, y WebKit deja entonces el
+  // body reportando rgba(0,0,0,0). En html el valor es el mismo en los dos
+  // motores.
+  const background = await page.evaluate(
+    () => getComputedStyle(document.documentElement).backgroundColor,
+  )
   expect(background).toBe('rgb(18, 17, 16)')
 
   const heading = page.getByRole('heading', { name: 'Studio OS', level: 1 })

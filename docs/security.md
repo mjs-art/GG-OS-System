@@ -82,6 +82,7 @@ Si una llave se filtra: rotarla en el panel de Supabase **primero**, después li
 En `next.config.ts`:
 
 - CSP estricta. `frame-ancestors 'none'`, `object-src 'none'`, `base-uri 'self'`. `unsafe-eval` solo en desarrollo, donde Next lo necesita para fast refresh.
+- `upgrade-insecure-requests` **solo cuando `NEXT_PUBLIC_SITE_URL` es https**. La directiva reescribe toda petición http a https; Chromium exenta localhost, WebKit no. Sobre http plano, Safari intenta TLS contra el servidor, falla, y la página se queda sin CSS y sin JavaScript. Se descubrió con las pruebas de WebKit y hay una regresión que lo cubre en `e2e/cimientos.spec.ts`.
 - HSTS con `preload`, `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: strict-origin-when-cross-origin`.
 - `Permissions-Policy` apaga cámara, micrófono, geolocalización y topics.
 - `poweredByHeader: false`.

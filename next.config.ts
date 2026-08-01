@@ -9,6 +9,22 @@ import type { NextConfig } from 'next'
  */
 const isDev = process.env.NODE_ENV === 'development'
 
+/**
+ * ¿Nos sirven sobre TLS de verdad?
+ *
+ * Importa por `upgrade-insecure-requests`. Esa directiva reescribe TODA
+ * petición http:// a https://, y Chromium exenta localhost pero WebKit no:
+ * sobre http plano, Safari intenta TLS contra el servidor, falla, y la página
+ * se queda sin CSS y sin JavaScript. No es teórico — así se descubrió, con las
+ * pruebas de WebKit.
+ *
+ * La directiva protege contra contenido mixto en un despliegue con HTTPS real.
+ * En local sobre http es puro daño. Se decide por la URL configurada y no por
+ * NODE_ENV, porque `next start` corre en producción y aun así puede estar
+ * sirviendo en http (las pruebas de extremo a extremo, un preview sin TLS).
+ */
+const servedOverTls = (process.env.NEXT_PUBLIC_SITE_URL ?? '').startsWith('https://')
+
 const securityHeaders = [
   { key: 'X-Content-Type-Options', value: 'nosniff' },
   { key: 'X-Frame-Options', value: 'DENY' },
@@ -39,7 +55,7 @@ const securityHeaders = [
       "form-action 'self'",
       "base-uri 'self'",
       "object-src 'none'",
-      'upgrade-insecure-requests',
+      ...(servedOverTls ? ['upgrade-insecure-requests'] : []),
     ].join('; '),
   },
 ]

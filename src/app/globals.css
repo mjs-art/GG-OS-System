@@ -70,6 +70,12 @@
   }
 
   html {
+    /* El fondo se declara aquí y no solo en el body a propósito.
+       Cuando el html es transparente, el navegador propaga el fondo del body
+       al lienzo — y WebKit, al hacerlo, deja el body reportando
+       `rgba(0,0,0,0)`. Declararlo en html evita esa ambigüedad, hace explícito
+       el color de la página, y quita el flash blanco al hacer overscroll. */
+    background-color: var(--color-ink);
     scroll-behavior: smooth;
     /* La navegación por anclas no debe meter el título bajo el header sticky. */
     scroll-padding-top: 5.5rem;
