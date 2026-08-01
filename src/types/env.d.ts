@@ -31,5 +31,9 @@ declare namespace NodeJS {
     readonly CI?: string
     readonly PORT?: string
     readonly E2E_BASE_URL?: string
+
+    // Las pone Vercel sola en el build. Solo se leen en next.config.ts.
+    readonly VERCEL_ENV?: 'production' | 'preview' | 'development'
+    readonly VERCEL_PROJECT_PRODUCTION_URL?: string
   }
 }
