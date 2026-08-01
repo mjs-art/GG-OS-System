@@ -40,7 +40,41 @@ test('un correo mal escrito no manda nada y lo dice', async ({ page }) => {
   await page.waitForFunction(() => document.body.dataset['hidratado'] === '1')
   await page.getByRole('button', { name: 'Mandar link' }).click()
 
-  await expect(page.getByRole('alert')).toBeVisible()
+  // Acotado a `main` porque Next inyecta su propio <next-route-announcer
+  // role="alert"> para lectores de pantalla, y sin acotar el selector lo
+  // cuenta como si fuera nuestro.
+  const alerta = page.locator('main').getByRole('alert')
+
+  // Se afirma el MENSAJE, no solo que exista una alerta.
+  //
+  // La versión anterior solo pedía `toBeVisible()` y pasó en verde mientras
+  // producción estaba rota: un bug distinto —el campo `destino` ausente en una
+  // visita directa— también pintaba una alerta. Una aserción que se conforma
+  // con "hay un error" no distingue el error que buscas del que no sabías que
+  // tenías.
+  await expect(alerta).toHaveText(/correo/i)
+  await expect(alerta).not.toHaveText(/invalid input|expected string|received/i)
+})
+
+test('se puede entrar llegando directo, sin destino en la URL', async ({ page }) => {
+  // La regresión del bug que se escapó a producción.
+  //
+  // Llegar a /entrar escribiendo la URL es el camino más común, y es el único
+  // en el que el campo oculto `destino` no existe. FormData.get() devuelve
+  // null ahí, no undefined, y el schema lo rechazaba: el login quedaba muerto
+  // justo por la puerta principal.
+  await page.goto('/entrar')
+
+  await expect(page.locator('input[name="destino"]')).toHaveCount(0)
+
+  await page.getByLabel('Correo').fill('nadie@example.com')
+  await page.waitForFunction(() => document.body.dataset['hidratado'] === '1')
+  await page.getByRole('button', { name: 'Mandar link' }).click()
+
+  // La respuesta es la misma exista o no el correo, para no filtrar quién
+  // tiene acceso. Lo que importa aquí es que NO sea un error de validación.
+  await expect(page.getByText('Revisa tu correo')).toBeVisible()
+  await expect(page.locator('main').getByRole('alert')).toHaveCount(0)
 })
 
 test('las cabeceras de seguridad están puestas', async ({ page }) => {

@@ -10,11 +10,54 @@
 -- =============================================================================
 
 -- --- Usuarios ---------------------------------------------------------------
-insert into auth.users (id, email, raw_user_meta_data) values
-  ('11111111-0000-4000-8000-000000000001', 'ana@ejemplo.test',      '{"name":"Ana"}'),
-  ('11111111-0000-4000-8000-000000000002', 'equipo@ejemplo.test',   '{"name":"Equipo"}'),
-  ('11111111-0000-4000-8000-000000000004', 'contacto@barficticio.test', '{"name":"Contacto"}')
+--
+-- Insertar solo (id, email) NO alcanza. GoTrue exige `aud`, `role`,
+-- `instance_id` y un correo confirmado para considerar que el usuario existe;
+-- sin eso, pedir un magic link responde "Signups not allowed for otp" y nadie
+-- puede entrar en local. Se ve igual que un problema de configuración y no lo
+-- es: son estos campos.
+insert into auth.users (
+  id, instance_id, aud, role, email, email_confirmed_at,
+  raw_app_meta_data, raw_user_meta_data, created_at, updated_at,
+  -- Estas columnas TIENEN que ir en cadena vacía, no en NULL.
+  -- GoTrue las lee como `string` de Go, que no sabe qué hacer con NULL, y
+  -- truena con un 500 opaco: "Scan error on column confirmation_token".
+  -- Desde afuera se ve como si el servicio de auth estuviera caído.
+  confirmation_token, recovery_token,
+  email_change, email_change_token_new, email_change_token_current,
+  phone_change, phone_change_token, reauthentication_token
+)
+select
+  u.id,
+  '00000000-0000-0000-0000-000000000000',
+  'authenticated',
+  'authenticated',
+  u.email,
+  now(),
+  '{"provider":"email","providers":["email"]}'::jsonb,
+  jsonb_build_object('name', u.name),
+  now(),
+  now(),
+  '', '', '', '', '', '', '', ''
+from (values
+  ('11111111-0000-4000-8000-000000000001'::uuid, 'ana@ejemplo.test',          'Ana'),
+  ('11111111-0000-4000-8000-000000000002'::uuid, 'equipo@ejemplo.test',       'Equipo'),
+  ('11111111-0000-4000-8000-000000000004'::uuid, 'contacto@barficticio.test', 'Contacto')
+) as u(id, email, name)
 on conflict (id) do nothing;
+
+-- La identidad de proveedor. Sin ella el usuario existe pero queda sin método
+-- de acceso vinculado, y algunos flujos de GoTrue lo tratan como incompleto.
+insert into auth.identities (
+  id, user_id, provider_id, provider, identity_data, last_sign_in_at, created_at, updated_at
+)
+select
+  gen_random_uuid(), u.id, u.id::text, 'email',
+  jsonb_build_object('sub', u.id::text, 'email', u.email, 'email_verified', true),
+  now(), now(), now()
+from auth.users u
+where u.email like '%@ejemplo.test' or u.email like '%@barficticio.test'
+on conflict (provider_id, provider) do nothing;
 
 -- --- Organización ------------------------------------------------------------
 insert into public.orgs (id, slug, name) values
