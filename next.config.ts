@@ -10,6 +10,24 @@ import type { NextConfig } from 'next'
 const isDev = process.env.NODE_ENV === 'development'
 
 /**
+ * La URL pública del sitio.
+ *
+ * Si no se configura, `env.ts` caería a localhost — y en producción eso no
+ * truena, solo manda magic links que apuntan a la máquina de quien los abre.
+ * Un login roto que se ve sano es peor que un build que falla.
+ *
+ * En Vercel se deriva sola del dominio de producción. Se usa el de producción
+ * y no `VERCEL_URL` incluso en los previews, porque la URL de callback tiene
+ * que estar en la lista blanca de Supabase y la de un preview efímero nunca
+ * lo va a estar.
+ */
+const siteUrl =
+  process.env.NEXT_PUBLIC_SITE_URL ||
+  (process.env.VERCEL_PROJECT_PRODUCTION_URL
+    ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+    : 'http://localhost:3000')
+
+/**
  * ¿Nos sirven sobre TLS de verdad?
  *
  * Importa por `upgrade-insecure-requests`. Esa directiva reescribe TODA
@@ -23,7 +41,7 @@ const isDev = process.env.NODE_ENV === 'development'
  * NODE_ENV, porque `next start` corre en producción y aun así puede estar
  * sirviendo en http (las pruebas de extremo a extremo, un preview sin TLS).
  */
-const servedOverTls = (process.env.NEXT_PUBLIC_SITE_URL ?? '').startsWith('https://')
+const servedOverTls = siteUrl.startsWith('https://')
 
 const securityHeaders = [
   { key: 'X-Content-Type-Options', value: 'nosniff' },
@@ -67,6 +85,9 @@ const nextConfig: NextConfig = {
   // pnpm-workspace.yaml hace que Turbopack dude de cuál es la raíz. Se la
   // decimos y de paso evitamos que suba de directorio buscando otra.
   turbopack: { root: import.meta.dirname },
+
+  // Se inyecta ya resuelta para que `env.ts` la vea igual en local y en Vercel.
+  env: { NEXT_PUBLIC_SITE_URL: siteUrl },
 
   // A type error must never reach production. Lint runs as its own CI gate
   // (Next 16 no longer runs ESLint during `next build`).
