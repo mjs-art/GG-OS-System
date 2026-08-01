@@ -137,8 +137,16 @@ test('el sistema de diseño cargó', async ({ page }) => {
   // Sin cookie de tema, el default es oscuro.
   expect(await fondo(page)).toBe(OSCURO)
 
+  // El display es serif. Antes esta aserción pedía `text-transform: uppercase`
+  // porque el display era Archivo expandida en caps; con la tipografía de Ana
+  // dejó de ser mayúsculas, así que ahora se afirma la familia — que es lo que
+  // de verdad distingue "cargaron los tokens" de "la app se ve genérica".
   const heading = page.getByRole('heading', { name: 'Studio OS', level: 1 })
-  await expect(heading).toHaveCSS('text-transform', 'uppercase')
+  await expect(heading).toHaveCSS('font-family', /Instrument Serif/)
+
+  // Y el body es la Helvetica del sistema, sin descargar nada.
+  const bodyFont = await page.evaluate(() => getComputedStyle(document.body).fontFamily)
+  expect(bodyFont).toMatch(/Helvetica/)
 })
 
 test('el switch cambia el tema y la preferencia sobrevive la navegación', async ({ page }) => {
