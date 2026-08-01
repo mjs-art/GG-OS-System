@@ -120,38 +120,25 @@ Los colores que sí son literales en runtime — el de cada pilar y el de marca 
 
 ## Tipografía
 
-Hoy: **Archivo** expandido en mayúsculas para display · **Inter Tight** para UI · **IBM Plex Mono** 11px para datos, fechas, labels y chips.
+| Trabajo                                             | Familia                         | Clase                                       |
+| --------------------------------------------------- | ------------------------------- | ------------------------------------------- |
+| Títulos, nombres de cliente, números grandes        | **Instrument Serif** 400        | `.type-display`                             |
+| Frases y nombres en registro editorial              | **Instrument Serif** 400 italic | `.type-display-italic` · `<Display italic>` |
+| Interfaz, párrafos, botones                         | **Helvetica** del sistema       | default del `body`                          |
+| Datos, fechas, labels, chips, mayúsculas espaciadas | **IBM Plex Mono** 11px          | `.type-mono`                                |
 
-### Pendiente: Meno Banner y Helvetica
+**El display ya no es mayúsculas.** Antes era Archivo expandida en caps, que funcionaba porque era una grotesca ancha. En una serif de alto contraste las mayúsculas espaciadas se ven como invitación de boda, y el specimen de Ana usa caja normal para el display. Las caps espaciadas quedaron como trabajo del mono, que es donde ya vivían.
 
-Junto con la paleta, Ana entregó una dirección tipográfica distinta: **Helvetica** como principal para body text y **Meno Banner** (Italic y Light) para display y links. No está implementada todavía.
+**Instrument Serif solo tiene peso 400** más itálica. No pidas 300 ni 700: el navegador los sintetiza y en una serif de alto contraste se nota feo.
 
-**Meno Banner** es de Richard Lipton (Lipton Letter Design, The Type Founders) y está **en Adobe Fonts**. Eso importa: si el estudio ya paga Creative Cloud, el uso web viene incluido sin costo extra — se crea un Web Project y se sirve desde ahí. No hay que comprar licencia aparte. Meno es un **oldstyle**: las romanas vienen de las formas barrocas francesas de Granjon y las itálicas del trabajo de Voskens en el Ámsterdam del siglo XVII. `Banner` es el tamaño óptico de display: más contraste y hairlines más finas que el corte de texto.
+### Instrument Serif está en lugar de Meno Banner
 
-Si por lo que sea no se puede usar Adobe Fonts —headless en CI, un cliente sin cuenta, no querer una dependencia externa en el render— la alternativa libre es **Instrument Serif** (OFL, Google Fonts). Se compararon ocho candidatas contra el specimen de Ana igualando la altura de x, y es la única que acierta las tres cosas que definen a Banner: alto contraste, x-height grande con ascendentes cortas, y proporciones condensadas. Su itálica es de display —firme, no caligráfica—, igual que la de Meno.
+Ana entregó **Meno Banner** (Italic y Light) para display y **Helvetica** para body. Meno Banner es de Richard Lipton (Lipton Letter Design, The Type Founders) y está **en Adobe Fonts**: si algún día el estudio paga Creative Cloud, el uso web viene incluido sin costo extra — se crea un Web Project y se sirve de ahí. Hoy no se paga nada, así que va la alternativa libre.
 
-Lo que se descartó y por qué, porque el error es fácil de repetir:
+Meno es un **oldstyle**: las romanas vienen de las formas barrocas francesas de Granjon y las itálicas del trabajo de Voskens en el Ámsterdam del siglo XVII. `Banner` es el tamaño óptico de display — más contraste y hairlines más finas que el corte de texto. Ese detalle importa y es donde es fácil equivocarse: "oldstyle" empuja hacia los Garamond, y los Garamond fallan el tamaño óptico.
 
-| Candidata            | Problema                                                             |
-| -------------------- | -------------------------------------------------------------------- |
-| Cormorant Garamond   | demasiado delicada, x-height chica — se ve frágil, no de banner      |
-| EB Garamond          | contraste bajo y más ancha; acierta la época, falla el tamaño óptico |
-| Sorts Mill Goudy     | itálica muy caligráfica, con tics de Goudy                           |
-| Libre Caslon Display | no tiene itálica real                                                |
-| Crimson Pro          | versátil pero contraste bajo, se lee como fuente de libro            |
-| Newsreader           | transicional, no oldstyle                                            |
-| Playfair Display     | el error común: es didone, otra época, y mucho más ancha             |
+**Instrument Serif** (OFL, Google Fonts) fue la ganadora de ocho candidatas comparadas contra el specimen **igualando la altura de x** — dos fuentes al mismo `font-size` no tienen el mismo tamaño óptico, y compararlas así es hacerse trampa. Es la única que acierta las tres cosas que definen a Banner: alto contraste, x-height grande con ascendentes cortas, y proporciones condensadas. Su itálica es de display, firme y no caligráfica, igual que la de Meno.
 
-La limitación de Instrument Serif es que solo tiene un peso (400) más itálica. Meno Banner Light es el que Ana usa para la línea de mayúsculas espaciadas; con Instrument Serif esa línea sale un poco más pesada. A tamaño de label casi no se nota.
-
-**Helvetica** no es universal: en Mac y iOS existe, en Windows y Android cae a Arial, que tiene otro color de página. Si eso importa, se resuelve con Inter (gratis, ya cargada) o comprando Helvetica Now.
-
-Cambiar la tipografía es un cambio de carácter, no un ajuste: deja de leerse como sala de control y se vuelve estudio de diseño. Los previews están en `.context/preview-paleta.html` (las tres variantes de tema) y `.context/specimen-meno.html` (las ocho candidatas contra la referencia).
-
----
-
-## Lenguaje
-
-Español de México. Sentence case. Verbos directos. Cero jerga técnica. Cero emojis decorativos.
+**Migrar a Meno el día que se pueda es cambiar `layout.tsx` y nada más.** Ningún componente nombra una familia: todos pasan por `.type-display` y `--font-display`.
 
 **Estados vacíos** dicen qué hacer. "Sin datos" no es un estado vacío, es una disculpa. **Errores** explican qué pasó y cómo arreglarlo, sin disculparse.

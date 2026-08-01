@@ -80,8 +80,20 @@
   --color-pillar-6: #8a7b4f;
 
   /* --- Tipografía ----------------------------------------------------------- */
-  --font-display: var(--font-archivo), ui-sans-serif, system-ui, sans-serif;
-  --font-sans: var(--font-inter-tight), ui-sans-serif, system-ui, sans-serif;
+  /* Display: Instrument Serif, en lugar de Meno Banner. Ver el comentario en
+     layout.tsx para por qué esa y no otra. */
+  --font-display: var(--font-instrument-serif), Georgia, serif;
+
+  /* Helvetica de sistema, que es lo que pidió Ana, y sin descargar un byte.
+     En Mac y iOS sale Helvetica Neue de verdad — que es donde Ana trabaja y
+     donde sus clientes abren el portal. En Windows y Android cae a Arial, que
+     es un clon de Helvetica con las mismas métricas: el fallback más cercano
+     que existe, más que cualquier webfont que pudiéramos cargar.
+
+     Por eso NO se usa font-weight 500 en la UI: Helvetica Neue lo tiene, Arial
+     no, y el navegador lo sintetiza engordando los trazos. 400 y 700. */
+  --font-sans: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+
   --font-mono: var(--font-plex-mono), ui-monospace, monospace;
 
   /* --- Radio: 2px en todo ----------------------------------------------------- */
@@ -192,14 +204,29 @@
 }
 
 @layer components {
-  /* Display: nombres de cliente, títulos de sección, números grandes. */
+  /* Display: nombres de cliente, títulos de sección, números grandes.
+
+     Dejó de ser mayúsculas. La versión anterior era Archivo expandida en caps,
+     que funcionaba porque era una grotesca ancha; en una serif de alto
+     contraste las mayúsculas espaciadas se ven como invitación de boda. El
+     specimen de Ana usa caja normal para el display y deja las mayúsculas
+     espaciadas para labels — que aquí ya las hace .type-mono. */
   .type-display {
     font-family: var(--font-display);
-    font-weight: 700;
-    font-stretch: 125%;
-    text-transform: uppercase;
-    letter-spacing: -0.02em;
-    line-height: 1;
+    font-weight: 400;
+    letter-spacing: -0.01em;
+    line-height: 1.02;
+  }
+
+  /* El registro itálico del specimen: la frase que encabeza una sección, el
+     nombre de un cliente en una ficha. NO para números — una cifra en itálica
+     de alto contraste se lee peor y este producto es medio tablero. */
+  .type-display-italic {
+    font-family: var(--font-display);
+    font-weight: 400;
+    font-style: italic;
+    letter-spacing: 0;
+    line-height: 1.1;
   }
 
   /* Mono: fechas, contadores, labels de campo, chips de estado, agentes. */

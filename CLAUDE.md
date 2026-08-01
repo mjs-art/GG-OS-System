@@ -145,7 +145,7 @@ Se llaman por rol y no por color a propósito: `--color-ink` significando "el fo
 - **Cero sombras.** La jerarquía se construye con espacio y peso tipográfico.
 - Todos los bordes son hairline de 1px en `--color-line`. `border-radius: 2px` en todo.
 - Sin gradientes, sin glassmorphism, sin glow.
-- Tres tipografías con trabajos distintos: **Archivo** expandido en mayúsculas para display (nombres de cliente, títulos, números grandes) · **Inter Tight** para UI · **IBM Plex Mono** 11px para datos, fechas, labels y chips.
+- Tres tipografías con trabajos distintos: **Instrument Serif** para display (`.type-display`, y `.type-display-italic` para frases y nombres) · **Helvetica** de sistema para UI · **IBM Plex Mono** 11px para datos, fechas, labels y chips. El display **ya no es mayúsculas**: las caps espaciadas son trabajo del mono. Instrument Serif solo tiene peso 400 — no pidas 300 ni 700, el navegador los sintetiza y se ve mal.
 - Foco visible en `--color-accent-hot` en todo lo interactivo. Respeta `prefers-reduced-motion`.
 - Responsive hasta 375px.
 

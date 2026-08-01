@@ -12,12 +12,20 @@ import { cn } from '@/lib/cn'
 
 type TextProps = HTMLAttributes<HTMLElement>
 
+/**
+ * `italic` cambia el registro, no solo la inclinación: es la voz editorial del
+ * specimen de Ana, para frases y nombres. Los números van en redonda — una
+ * cifra en itálica de alto contraste se lee peor.
+ */
 export function Display({
   as: Tag = 'div',
+  italic = false,
   className,
   ...props
-}: TextProps & { as?: 'h1' | 'h2' | 'h3' | 'div' | 'span' }) {
-  return <Tag className={cn('type-display', className)} {...props} />
+}: TextProps & { as?: 'h1' | 'h2' | 'h3' | 'div' | 'span'; italic?: boolean }) {
+  return (
+    <Tag className={cn(italic ? 'type-display-italic' : 'type-display', className)} {...props} />
+  )
 }
 
 export function Mono({
