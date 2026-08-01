@@ -6,8 +6,13 @@ import { createClient } from '@/lib/supabase/server'
 
 const schema = z.object({
   email: z.email('Ese correo no se ve bien. Revísalo.').max(320),
-  // A dónde regresar después de entrar. Se valida abajo.
-  destino: z.string().optional(),
+  // A dónde regresar después de entrar. Se valida en safeDestination.
+  //
+  // `nullish` y no `optional`: FormData.get() devuelve **null**, no undefined,
+  // cuando el campo no viene — y no viene cuando alguien escribe /entrar
+  // directo en vez de llegar rebotado desde una ruta protegida. Con
+  // `.optional()` esa era la ruta más común y el login quedaba muerto.
+  destino: z.string().nullish(),
 })
 
 export interface EntrarState {
@@ -22,7 +27,7 @@ export interface EntrarState {
  * /entrar?destino=https://sitio-falso.com, la víctima entra de verdad, y sale
  * a un clon que le pide sus datos con la confianza ya ganada.
  */
-function safeDestination(value: string | undefined): string {
+function safeDestination(value: string | null | undefined): string {
   if (!value) return '/'
   if (!value.startsWith('/')) return '/'
   // '//otro-sitio.com' también sale del dominio.
@@ -63,7 +68,19 @@ export async function enviarMagicLink(
   // Ojo: la respuesta es la misma exista o no el correo. Si dijéramos "ese
   // correo no está registrado", cualquiera podría averiguar quién es cliente
   // de quién probando direcciones.
-  if (error && error.status !== 400) {
+  //
+  // 4xx significa "ese correo no tiene acceso" y se responde igual que un
+  // éxito. Solo un fallo de infraestructura —5xx, red caída— merece decirle a
+  // la persona que vuelva a intentar.
+  //
+  // El rango se verificó contra la API, no se supuso: un correo sin cuenta
+  // devuelve **422 otp_disabled**, no 400. La versión anterior comparaba
+  // contra 400 y le enseñaba "no se pudo mandar el correo" a todo el mundo,
+  // incluidos los usuarios legítimos.
+  const esFalloDeInfraestructura =
+    error !== null && (error.status === undefined || error.status >= 500)
+
+  if (esFalloDeInfraestructura) {
     return {
       status: 'error',
       message: 'No se pudo mandar el correo. Vuelve a intentar en un momento.',
