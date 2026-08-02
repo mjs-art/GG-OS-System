@@ -8,6 +8,7 @@ import { CampoSprint } from '@/components/planner/campo-sprint'
 import { Interruptor, LabelCampo, SegmentedControl } from '@/components/planner/controles'
 import { Drawer } from '@/components/planner/drawer'
 import { PostInstagram } from '@/components/post/post-instagram'
+import { PostTikTok } from '@/components/post/post-tiktok'
 import {
   ACCIONES_DE_AGENTE,
   ESTADOS,
@@ -157,6 +158,8 @@ function CuerpoDrawer({
   // El toggle Editar | Ver como post NO remonta el cuerpo: alterna con `hidden`
   // para que el texto sin guardar de los campos no se pierda al cambiar de modo.
   const [modo, setModo] = useState<'editar' | 'post'>('editar')
+  const [vistaPost, setVistaPost] = useState<'instagram' | 'tiktok'>('instagram')
+  const tieneTikTok = pieza.platforms.includes('tiktok')
 
   const entrega = estadoDeEntrega(pieza, contexto.hoy)
 
@@ -230,7 +233,59 @@ function CuerpoDrawer({
         ]}
       />
 
-      {modo === 'post' && (
+      {modo === 'post' && tieneTikTok && (
+        <SegmentedControl
+          etiqueta="Vista de la publicación"
+          valor={vistaPost}
+          onCambio={setVistaPost}
+          opciones={[
+            { id: 'instagram', label: 'Instagram' },
+            { id: 'tiktok', label: 'TikTok' },
+          ]}
+        />
+      )}
+
+      {modo === 'post' && vistaPost === 'instagram' && (
+        <PostInstagram
+          handle={contexto.cuenta.handle}
+          avatarUrl={contexto.cuenta.avatarUrl}
+          bio={contexto.cuenta.bio}
+          brandColor={contexto.cuenta.brandColor}
+          imageUrl={contexto.urlAsset}
+          fallbackColor={pilares.find((p) => p.id === pieza.pillarId)?.color ?? null}
+          format={pieza.format}
+          caption={componerCaption({
+            hook: pieza.hook,
+            copyIn: pieza.copyIn,
+            copyOut: pieza.copyOut,
+            cta: pieza.cta,
+            hashtags: pieza.hashtags,
+          })}
+          fecha={pieza.publishAt ? formatDate(new Date(pieza.publishAt)) : null}
+        />
+      )}
+
+      {modo === 'post' && vistaPost === 'tiktok' && (
+        <PostTikTok
+          handle={contexto.cuenta.handle}
+          avatarUrl={contexto.cuenta.avatarUrl}
+          bio={contexto.cuenta.bio}
+          brandColor={contexto.cuenta.brandColor}
+          imageUrl={contexto.urlAsset}
+          fallbackColor={pilares.find((p) => p.id === pieza.pillarId)?.color ?? null}
+          format={pieza.format}
+          caption={componerCaption({
+            hook: pieza.hook,
+            copyIn: pieza.copyIn,
+            copyOut: pieza.copyOut,
+            cta: pieza.cta,
+            hashtags: pieza.hashtags,
+          })}
+          fecha={pieza.publishAt ? formatDate(new Date(pieza.publishAt)) : null}
+        />
+      )}
+
+      {modo === 'post' && !tieneTikTok && (
         <PostInstagram
           handle={contexto.cuenta.handle}
           avatarUrl={contexto.cuenta.avatarUrl}
