@@ -1,15 +1,17 @@
 'use client'
 
+import { Upload } from 'lucide-react'
 import Link from 'next/link'
-import { useActionState, useMemo, useState } from 'react'
+import { useActionState, useCallback, useMemo, useRef, useState } from 'react'
 import { importarDesdeNotion, type EstadoImportacion } from '@/components/importar/acciones'
 import { VistaPrevia } from '@/components/importar/vista-previa'
 import { Button, Card, Display, EmptyState, Mono } from '@/components/ui/primitives'
 import { construirPlanDeImportacion, resumenDelPlan } from '@/domain/importar-notion'
 import type { ContextoDeImportacion } from '@/lib/datos/importar'
+import { cn } from '@/lib/cn'
 
 /**
- * Pegar → ver → empatar → confirmar.
+ * Pegar → ver → empatar → confirmar. O arrastrar el archivo directo.
  *
  * La vista previa se calcula aquí, en el navegador, porque el mapeo es puro:
  * pegar 200 renglones y ver el resultado no debería costar un viaje al
@@ -31,8 +33,12 @@ export function Importador({ contexto }: { contexto: ContextoDeImportacion }) {
   const [empates, setEmpates] = useState<Record<string, string>>({})
   const [estado, action, pendiente] = useActionState(importarDesdeNotion, INICIAL)
 
-  // Reparsear en cada tecla es barato con un CSV de un mes, pero no gratis con
-  // uno de 2000 renglones. `useMemo` lo ata al texto y no al render.
+  // Drag & drop
+  const [arrastrando, setArrastrando] = useState(false)
+  const [leyendoArchivo, setLeyendoArchivo] = useState(false)
+  const [errorArchivo, setErrorArchivo] = useState<string | null>(null)
+  const archivoRef = useRef<HTMLInputElement>(null)
+
   const plan = useMemo(
     () => (texto.trim() === '' ? null : construirPlanDeImportacion(texto)),
     [texto],
@@ -40,12 +46,34 @@ export function Importador({ contexto }: { contexto: ContextoDeImportacion }) {
 
   const mesesPoblados = plan?.meses.filter((mes) => (contexto.piezasPorMes[mes] ?? 0) > 0) ?? []
 
-  // Solo se mandan los empates que la persona eligió de verdad. Un nombre sin
-  // empatar se importa sin responsable, que es honesto: mejor un hueco visible
-  // que una pieza asignada a quien no es.
   const asignaciones = Object.fromEntries(
     Object.entries(empates).filter(([, id]) => id !== SIN_RESPONSABLE),
   )
+
+  const procesarArchivo = useCallback(async (archivo: File) => {
+    const nombre = archivo.name.toLowerCase()
+    if (!nombre.endsWith('.csv') && !nombre.endsWith('.json')) {
+      setErrorArchivo('Solo se aceptan archivos .csv o .json exportados de Notion.')
+      return
+    }
+    setLeyendoArchivo(true)
+    setErrorArchivo(null)
+    try {
+      const contenido = await archivo.text()
+      setTexto(contenido)
+    } catch {
+      setErrorArchivo('No se pudo leer el archivo.')
+    } finally {
+      setLeyendoArchivo(false)
+    }
+  }, [])
+
+  const onDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    setArrastrando(false)
+    const archivo = e.dataTransfer.files[0]
+    if (archivo) procesarArchivo(archivo)
+  }
 
   if (estado.status === 'importado') {
     return (
@@ -67,17 +95,70 @@ export function Importador({ contexto }: { contexto: ContextoDeImportacion }) {
 
   return (
     <div className="flex flex-col gap-10">
-      {/* --- 1. Pegar -------------------------------------------------------- */}
+      {/* --- 1. Pegar o arrastrar --------------------------------------------- */}
       <section>
         <Display as="h2" className="text-lg">
-          1 · Pega lo que exportaste
+          1 · Pega o arrastra lo que exportaste
         </Display>
         <p className="text-fg-muted mt-1 max-w-prose text-[13px]">
           En Notion abre la base <span className="type-display-italic">Social Media / Podcast</span>
-          , menú ··· → Exportar → CSV, y pega el archivo completo aquí. También sirve el JSON. No
-          hay conexión con Notion y no la va a haber: esto se hace una vez por cliente y después
-          Studio OS es la fuente de verdad.
+          , menú ··· → Exportar → CSV, y{' '}
+          <strong className="text-fg font-normal">
+            arrastra el archivo aquí o pégalo en el cuadro de abajo
+          </strong>
+          . También sirve el JSON. No hay conexión con Notion y no la va a haber: esto se hace una
+          vez por cliente y después Studio OS es la fuente de verdad.
         </p>
+
+        <div
+          className={cn(
+            'border-line mt-4 flex flex-col items-center gap-2 rounded-xs border border-dashed px-4 py-5 transition-colors',
+            arrastrando && 'border-accent-hot bg-surface',
+            leyendoArchivo && 'opacity-60',
+          )}
+          onDragOver={(e) => {
+            e.preventDefault()
+            setArrastrando(true)
+          }}
+          onDragLeave={() => setArrastrando(false)}
+          onDrop={onDrop}
+          onClick={() => archivoRef.current?.click()}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') archivoRef.current?.click()
+          }}
+        >
+          <Upload aria-hidden className="text-fg-muted size-4" />
+          <p className="text-fg-muted text-[13px]">
+            {leyendoArchivo
+              ? 'Leyendo archivo…'
+              : arrastrando
+                ? 'Suelta el archivo aquí'
+                : 'Arrastra el CSV o haz clic para buscarlo'}
+          </p>
+          <input
+            ref={archivoRef}
+            type="file"
+            accept=".csv,.json"
+            className="hidden"
+            onChange={(e) => {
+              const archivo = e.target.files?.[0]
+              if (archivo) procesarArchivo(archivo)
+              if (archivoRef.current) archivoRef.current.value = ''
+            }}
+          />
+        </div>
+
+        {errorArchivo && (
+          <div
+            className="bg-surface-2 mt-3 border-l-[3px] px-4 py-3"
+            style={{ borderLeftColor: 'var(--color-accent-hot)' }}
+            role="status"
+          >
+            <p className="text-[13px]">{errorArchivo}</p>
+          </div>
+        )}
 
         <label htmlFor="texto" className="sr-only">
           CSV o JSON exportado de Notion
@@ -88,8 +169,8 @@ export function Importador({ contexto }: { contexto: ContextoDeImportacion }) {
           onChange={(e) => setTexto(e.target.value)}
           rows={8}
           spellCheck={false}
-          placeholder="Tarea,Canal,Formato,Estado,Fecha de Entrega,Fecha de publicación,Responsable,Sprint,Transición-Teaser"
-          className="border-line bg-bg text-fg type-mono mt-4 w-full rounded-xs border p-3"
+          placeholder="También puedes pegar el contenido del CSV aquí."
+          className="border-line bg-bg text-fg type-mono mt-3 w-full rounded-xs border p-3"
         />
 
         {plan && (
@@ -105,7 +186,7 @@ export function Importador({ contexto }: { contexto: ContextoDeImportacion }) {
       {plan === null && (
         <EmptyState
           title="Todavía no hay nada que revisar"
-          body="Pega el CSV arriba y aquí aparece qué se va a crear, qué renglones no se pudieron mapear y qué personas hay que empatar. Nada se escribe hasta que lo confirmes."
+          body="Arrastra el CSV o pégalo arriba y aquí aparece qué se va a crear, qué renglones no se pudieron mapear y qué personas hay que empatar. Nada se escribe hasta que lo confirmes."
         />
       )}
 
