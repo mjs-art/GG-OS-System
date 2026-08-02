@@ -2,7 +2,9 @@
 
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
+import { crearClienteInstagram } from '@/lib/apis/instagram'
 import { codeRuleParams, ruleSeverity } from '@/domain/brand-rules'
+import { serverEnv } from '@/lib/env'
 import { createClient, requireUser } from '@/lib/supabase/server'
 import { systemClock } from '@/lib/time'
 
@@ -104,6 +106,101 @@ export async function auditarCuentas(input: unknown): Promise<ResultadoAuditoria
   return {
     status: 'ok',
     message: `${revisadas.length} ${revisadas.length === 1 ? 'cuenta revisada' : 'cuentas revisadas'}.`,
+    revisadas,
+  }
+}
+
+/**
+ * Sincroniza los datos de Instagram desde la API: seguidores, último post,
+ * publicaciones de la semana.
+ *
+ * Si el token no está configurado, el mensaje lo dice y la app sigue
+ * funcionando con captura manual. Esa es la diferencia entre una feature que
+ * no sirve y una que todavía no se enchufa.
+ */
+export async function sincronizarRedes(
+  input: unknown,
+): Promise<{ status: 'ok' | 'error'; message: string; revisadas: string[] }> {
+  const parsed = idsSchema.pick({ clientId: true, slug: true }).safeParse(input)
+  if (!parsed.success) {
+    return {
+      status: 'error',
+      message: 'No se pudo identificar al cliente. Recarga la página e intenta de nuevo.',
+      revisadas: [],
+    }
+  }
+
+  const token = serverEnv().INSTAGRAM_LONG_LIVED_TOKEN
+  if (!token) {
+    return {
+      status: 'ok',
+      message:
+        'Instagram Graph API no está configurada todavía. Las métricas se capturan a mano por ahora.',
+      revisadas: [],
+    }
+  }
+
+  const supabase = await createClient()
+
+  const { data: cuentas } = await supabase
+    .from('social_accounts')
+    .select('id, platform')
+    .eq('client_id', parsed.data.clientId)
+    .eq('platform', 'instagram')
+
+  if (!cuentas?.length) {
+    return {
+      status: 'error',
+      message: 'El cliente no tiene cuentas de Instagram registradas.',
+      revisadas: [],
+    }
+  }
+
+  const clienteIg = crearClienteInstagram({ token, businessAccountId: 'me' })
+  const frescos = await clienteIg.datosFrescos()
+
+  if (!frescos) {
+    return {
+      status: 'error',
+      message:
+        'El token de Instagram rechazó la petición. Revisa que esté vigente y que la cuenta de negocio esté conectada a la página de Facebook.',
+      revisadas: [],
+    }
+  }
+
+  const ahora = systemClock.now().toISOString()
+  const revisadas: string[] = []
+
+  for (const cuenta of cuentas) {
+    const { error, data } = await supabase
+      .from('social_accounts')
+      .update({
+        followers: frescos.followers,
+        last_post_at: frescos.lastPostAt ?? null,
+        posts_per_week: frescos.postsThisWeek,
+        checked_at: ahora,
+      })
+      .eq('id', cuenta.id)
+      .select('id')
+
+    if (!error && (data ?? []).length > 0) {
+      revisadas.push(cuenta.id)
+    }
+  }
+
+  if (revisadas.length === 0) {
+    return {
+      status: 'error',
+      message: 'No se pudo actualizar ninguna cuenta. Revisa los permisos del token.',
+      revisadas: [],
+    }
+  }
+
+  refrescarCliente(parsed.data.slug)
+
+  return {
+    status: 'ok',
+    message: `${revisadas.length} ${revisadas.length === 1 ? 'cuenta sincronizada' : 'cuentas sincronizadas'} desde Instagram. Seguidores, última publicación y cadencia al día.`,
     revisadas,
   }
 }

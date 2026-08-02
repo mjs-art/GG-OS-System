@@ -13,7 +13,7 @@ import {
 } from '@/components/ui/primitives'
 import { cn } from '@/lib/cn'
 import type { Semaforo } from '@/domain/redes'
-import { auditarCuentas } from './acciones'
+import { auditarCuentas, sincronizarRedes } from './acciones'
 
 /**
  * Las tarjetas de § Redes, con el botón de auditar.
@@ -113,6 +113,25 @@ export function PanelRedes({
     }
   }, [clientId, slug])
 
+  const sincronizar = useCallback(async () => {
+    setCorriendo(true)
+    setAviso(null)
+    setDestellando([])
+
+    const [resultado] = await Promise.all([
+      sincronizarRedes({ clientId, slug }),
+      esperar(MINIMO_SPINNER_MS),
+    ])
+
+    setCorriendo(false)
+    setAviso({ tono: resultado.status === 'ok' ? 'ok' : 'error', texto: resultado.message })
+
+    if (resultado.status === 'ok' && resultado.revisadas.length > 0) {
+      setDestellando(resultado.revisadas)
+      temporizador.current = setTimeout(() => setDestellando([]), DURACION_DESTELLO_MS)
+    }
+  }, [clientId, slug])
+
   return (
     <>
       <div className="mb-6 flex flex-wrap items-center justify-end gap-3">
@@ -121,6 +140,10 @@ export function PanelRedes({
             {aviso.texto}
           </Mono>
         )}
+        <Button variant="agent" onClick={sincronizar} disabled={corriendo} aria-busy={corriendo}>
+          {corriendo && <LoaderCircle aria-hidden className="size-3.5 animate-spin" />}
+          {corriendo ? 'Sincronizando' : 'Sincronizar Instagram'}
+        </Button>
         <Button variant="agent" onClick={auditar} disabled={corriendo} aria-busy={corriendo}>
           {corriendo && <LoaderCircle aria-hidden className="size-3.5 animate-spin" />}
           {corriendo ? 'Revisando cuentas' : 'Auditar cuentas'}

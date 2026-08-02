@@ -60,6 +60,23 @@ const serverSchema = z.object({
   AGENTS_PROVIDER: z.enum(['mock', 'anthropic']).default('mock'),
   ANTHROPIC_API_KEY: z.string().startsWith('sk-ant-').optional(),
   AGENTS_MONTHLY_BUDGET_USD: z.coerce.number().positive().default(50),
+
+  /** Facebook App ID. Necesario para refrescar tokens de Instagram y Meta Ads. */
+  META_APP_ID: z.string().optional(),
+  /** Facebook App Secret. No se commitea nunca. */
+  META_APP_SECRET: z.string().optional(),
+  /**
+   * Token de largo plazo de Instagram (60 días). Se obtiene con
+   * `refrescarTokenInstagram` durante el onboarding de cada cliente.
+   * Opcional: sin él, las métricas de Instagram entran por manual/CSV.
+   */
+  INSTAGRAM_LONG_LIVED_TOKEN: z.string().optional(),
+  /**
+   * Token de acceso al ad account de Meta. Scope mínimo: `ads_read`.
+   * Opcional: sin él, la pauta se sigue capturando a mano.
+   */
+  META_ADS_TOKEN: z.string().optional(),
+  META_ADS_ACCOUNT_ID: z.string().optional(),
 })
 
 let cachedServerEnv: z.infer<typeof serverSchema> | null = null
