@@ -1,7 +1,7 @@
 import 'server-only'
 
 import { z } from 'zod'
-import { codeRuleParams } from '@/domain/brand-rules'
+import { normalizarParamsDeRegla } from '@/domain/brand-rules'
 import type { AgentKey, PieceFormat, RuleCheck, RuleSeverity } from '@/domain/labels'
 import { createClient } from '@/lib/supabase/server'
 
@@ -219,7 +219,10 @@ export async function listarReglasDuras(clientId: string): Promise<ReglaDura[]> 
     rule: r.rule,
     severity: r.severity,
     checkBy: r.check_by,
-    verificable: r.check_by === 'modelo' || codeRuleParams.safeParse(r.params).success,
+    // Se usa la MISMA traducción que el verificador del Planner. Cuando cada
+    // uno tenía la suya, una regla se aplicaba en el drawer y aquí aparecía
+    // como mal configurada.
+    verificable: r.check_by === 'modelo' || normalizarParamsDeRegla(r.kind, r.params) !== null,
   }))
 }
 

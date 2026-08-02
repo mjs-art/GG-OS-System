@@ -1,4 +1,5 @@
 import type { Database } from '@/lib/supabase/database.types'
+import { partirCsv } from '@/domain/csv'
 
 /**
  * Reglas de la sección Pauta: dinero, comparación entre ad sets y lectura de
@@ -591,84 +592,6 @@ function normalizar(texto: string): string {
     .trim()
 }
 
-/**
- * Partidor de CSV que respeta comillas.
- *
- * `texto.split(',')` no sirve: el export de Meta trae nombres de ad set con
- * coma ("A · Interés, 25-45") y ese solo renglón corre todas las columnas de
- * lugar sin avisar.
- */
-export function partirCsv(texto: string): string[][] {
-  // Excel en Windows escribe un BOM al inicio siempre. Sin quitarlo, la primera
-  // columna se llama "﻿Ad set name" y no empata con ningún alias — el
-  // archivo se ve idéntico y la importación falla diciendo que no encuentra la
-  // columna que sí está ahí.
-  const limpio = texto.charCodeAt(0) === 0xfeff ? texto.slice(1) : texto
-  const separador = detectarSeparador(limpio)
-
-  const filas: string[][] = []
-  let fila: string[] = []
-  let campo = ''
-  let enComillas = false
-
-  for (let i = 0; i < limpio.length; i++) {
-    const c = limpio[i]
-
-    if (enComillas) {
-      if (c === '"') {
-        // "" adentro de comillas es una comilla literal.
-        if (limpio[i + 1] === '"') {
-          campo += '"'
-          i++
-        } else {
-          enComillas = false
-        }
-      } else {
-        campo += c
-      }
-      continue
-    }
-
-    if (c === '"') {
-      enComillas = true
-    } else if (c === separador) {
-      fila.push(campo)
-      campo = ''
-    } else if (c === '\n' || c === '\r') {
-      // \r\n cuenta como un solo salto.
-      if (c === '\r' && limpio[i + 1] === '\n') i++
-      fila.push(campo)
-      filas.push(fila)
-      fila = []
-      campo = ''
-    } else {
-      campo += c
-    }
-  }
-
-  if (campo !== '' || fila.length > 0) {
-    fila.push(campo)
-    filas.push(fila)
-  }
-
-  return filas.filter((f) => f.some((c) => c.trim() !== ''))
-}
-
-/**
- * Coma o punto y coma.
- *
- * Excel en español exporta con `;` y no con `,`, y un archivo que pasó por
- * Excel es la mitad de los que llegan. Se decide contando en el encabezado, no
- * en todo el texto: un nombre de ad set con punto y coma no debe poder cambiar
- * cómo se parte el archivo entero.
- */
-function detectarSeparador(texto: string): string {
-  const encabezado = texto.slice(0, texto.search(/[\r\n]/) + 1 || undefined)
-  const comas = (encabezado.match(/,/g) ?? []).length
-  const puntoYComa = (encabezado.match(/;/g) ?? []).length
-  return puntoYComa > comas ? ';' : ','
-}
-
 function enteroDe(texto: string | undefined): number {
   if (!texto) return 0
   const limpio = texto.replaceAll(/[\s,\u00a0\u202f]/g, '')
@@ -697,10 +620,10 @@ function fechaDe(texto: string | undefined): string | null {
  * enfrente. Aquí solo se resuelve la forma del archivo.
  */
 export function parsearCsvDeAds(texto: string): ResultadoCsv {
-  const filas = partirCsv(texto)
-  const encabezado = filas[0]
+  const tabla = partirCsv(texto)
+  const encabezado = tabla.encabezados
 
-  if (!encabezado) {
+  if (encabezado.length === 0) {
     return {
       filas: [],
       errores: ['El archivo está vacío. Exporta el reporte por día desde el ads manager.'],
@@ -733,19 +656,22 @@ export function parsearCsvDeAds(texto: string): ResultadoCsv {
   const salida: FilaCsvMetricas[] = []
   const errores: string[] = []
 
-  for (let n = 1; n < filas.length; n++) {
-    const fila = filas[n]
-    if (!fila) continue
+  // `cruda.linea` es la línea FÍSICA del archivo, no el índice del renglón.
+  // Importa: un nombre de ad set con salto de línea adentro desfasa la cuenta,
+  // y el reporte mandaría a Ana al renglón equivocado justo cuando el archivo
+  // es raro, que es cuando más necesita que el número sea correcto.
+  for (const cruda of tabla.filas) {
+    const fila = cruda.celdas
 
     const adSet = (fila[iAdSet] ?? '').trim()
     const fecha = fechaDe(fila[iFecha])
 
     if (!adSet) {
-      errores.push(`Renglón ${n + 1}: sin nombre de ad set.`)
+      errores.push(`Renglón ${cruda.linea}: sin nombre de ad set.`)
       continue
     }
     if (!fecha) {
-      errores.push(`Renglón ${n + 1}: la fecha "${fila[iFecha] ?? ''}" no se entiende.`)
+      errores.push(`Renglón ${cruda.linea}: la fecha "${fila[iFecha] ?? ''}" no se entiende.`)
       continue
     }
 

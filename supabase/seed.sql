@@ -47,7 +47,8 @@ from (values
   -- el suyo: dos que compartan buzón se consumen el magic link entre ellas y
   -- el síntoma es un otp_expired intermitente que parece bug de la app.
   ('11111111-0000-4000-8000-000000000005'::uuid, 'e2e-planner@ejemplo.test', 'E2E Planner'),
-  ('11111111-0000-4000-8000-000000000006'::uuid, 'e2e-portal@ejemplo.test',  'E2E Portal')
+  ('11111111-0000-4000-8000-000000000006'::uuid, 'e2e-portal@ejemplo.test',  'E2E Portal'),
+  ('11111111-0000-4000-8000-000000000007'::uuid, 'e2e-arrastre@ejemplo.test', 'E2E Arrastre')
 ) as u(id, email, name)
 on conflict (id) do nothing;
 
@@ -72,7 +73,10 @@ on conflict (id) do nothing;
 insert into public.org_members (org_id, user_id, role) values
   ('aaaaaaaa-0000-4000-8000-000000000001', '11111111-0000-4000-8000-000000000001', 'owner'),
   ('aaaaaaaa-0000-4000-8000-000000000001', '11111111-0000-4000-8000-000000000002', 'staff'),
-  ('aaaaaaaa-0000-4000-8000-000000000001', '11111111-0000-4000-8000-000000000005', 'staff')
+  ('aaaaaaaa-0000-4000-8000-000000000001', '11111111-0000-4000-8000-000000000005', 'staff'),
+  -- El usuario de la prueba de arrastre necesita ser staff: mover una pieza
+  -- pasa por `app.is_staff_of_client`, y sin membresía la función se niega.
+  ('aaaaaaaa-0000-4000-8000-000000000001', '11111111-0000-4000-8000-000000000007', 'staff')
 on conflict do nothing;
 
 -- --- Clientes ficticios --------------------------------------------------------
@@ -102,9 +106,9 @@ on conflict (id) do nothing;
 -- Las de `codigo` son las que el Editor de marca verifica sin llamar a un modelo.
 insert into public.brand_rules (org_id, client_id, kind, rule, severity, check_by, params) values
   ('aaaaaaaa-0000-4000-8000-000000000001', 'cccccccc-0000-4000-8000-000000000001',
-   'hashtags', 'Exactamente 5 hashtags por publicación', 'critica', 'codigo', '{"exact": 5}'),
+   'hashtags', 'Exactamente 5 hashtags por publicación', 'critica', 'codigo', '{"kind": "hashtags_exact", "count": 5}'),
   ('aaaaaaaa-0000-4000-8000-000000000001', 'cccccccc-0000-4000-8000-000000000001',
-   'formato', 'Todo el copy en minúsculas', 'alta', 'codigo', '{"lowercase": true}'),
+   'formato', 'Todo el copy en minúsculas', 'alta', 'codigo', '{"kind": "lowercase"}'),
   ('aaaaaaaa-0000-4000-8000-000000000001', 'cccccccc-0000-4000-8000-000000000001',
    'promesa', 'Nunca prometer disponibilidad de mesa sin reserva', 'critica', 'modelo', '{}')
 on conflict do nothing;
@@ -125,24 +129,47 @@ insert into public.context_card_versions (
 
 -- --- Piezas del mes ---------------------------------------------------------------
 -- Una en cada estado del pipeline, para que la interfaz muestre los seis.
+--
+-- Las cinco llevan fecha y una lleva candado, y eso no es decoración: es lo que
+-- hace ARRANCAR al Planner con algo que se puede mirar y mover. Sin publish_at
+-- el grid entero dice "Sin fecha", el riel de la derecha se queda en guiones y
+-- arrastrar una pieza sobre otra no cambia nada visible — ni para Ana ni para
+-- la prueba de extremo a extremo (`e2e/planner-arrastre.spec.ts`).
+--
+-- Las horas son las de Tijuana (-07 en septiembre) y los días caen donde el
+-- hook dice que caen: el jazz es jueves y la barra abre a las 6.
+--
+-- La pieza amarrada es a propósito la del jueves 24, la MÁS NUEVA del mes: así
+-- queda hasta arriba del grid (que ordena por fecha descendente) y las otras
+-- cuatro quedan seguidas debajo de ella. Un candado a media cuadrícula partiría
+-- el mes en dos tramos de dos piezas y "insertar y correr" no tendría sobre qué
+-- correr.
 insert into public.pieces
-  (org_id, client_id, pillar_id, month, format, status, slot_index, hook, hashtags, authored_by)
+  (org_id, client_id, pillar_id, month, format, status, slot_index, publish_at, date_locked,
+   hook, hashtags, authored_by)
 values
   ('aaaaaaaa-0000-4000-8000-000000000001', 'cccccccc-0000-4000-8000-000000000001',
    'eeeeeeee-0000-4000-8000-000000000001', '2026-09', 'reel',     'idea',        0,
+   '2026-09-18 19:00:00-07', false,
    'el trago que nadie pide y todos repiten', '{}', '{}'),
   ('aaaaaaaa-0000-4000-8000-000000000001', 'cccccccc-0000-4000-8000-000000000001',
    'eeeeeeee-0000-4000-8000-000000000002', '2026-09', 'carrusel', 'escrito',     1,
+   '2026-09-11 19:00:00-07', false,
    'tres formas de arruinar un old fashioned',
    '{"#cocteleria","#tijuana","#bar","#jazz","#mixologia"}', '{"hook":"redactor"}'),
   ('aaaaaaaa-0000-4000-8000-000000000001', 'cccccccc-0000-4000-8000-000000000001',
    'eeeeeeee-0000-4000-8000-000000000003', '2026-09', 'post',     'revisado',    2,
+   '2026-09-08 18:00:00-07', false,
    'la barra a las 6 y a las 9:40', '{}', '{"hook":"redactor"}'),
   ('aaaaaaaa-0000-4000-8000-000000000001', 'cccccccc-0000-4000-8000-000000000001',
    'eeeeeeee-0000-4000-8000-000000000001', '2026-09', 'reel',     'con_cliente', 3,
+   '2026-09-04 19:00:00-07', false,
    'lo que pasa cuando pides "algo rico"', '{}', '{"hook":"redactor"}'),
+  -- Amarrada al 24 de septiembre: el grid se niega a moverla y lo dice con la
+  -- fecha exacta.
   ('aaaaaaaa-0000-4000-8000-000000000001', 'cccccccc-0000-4000-8000-000000000001',
    'eeeeeeee-0000-4000-8000-000000000002', '2026-09', 'post',     'aprobado',    4,
+   '2026-09-24 20:00:00-07', true,
    'jueves de jazz, otra vez', '{}', '{}')
 on conflict do nothing;
 

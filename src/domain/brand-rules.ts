@@ -223,3 +223,42 @@ export function checkCodeRules(rules: readonly CodeRule[], piece: CheckablePiece
 function escapeRegex(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
+
+/**
+ * Traduce lo que hay en `brand_rules.params` a lo que entiende `checkCodeRules`.
+ *
+ * Existen dos formas guardadas y hay que aceptar las dos:
+ *
+ *   · La canónica, con el discriminante adentro: `{"kind":"hashtags_exact","count":5}`
+ *   · La abreviada que escribió el seed y la interfaz de Marca antes de que el
+ *     discriminante existiera: `{"exact":5}`, `{"lowercase":true}`
+ *
+ * Vive AQUÍ y no en cada lector por una razón concreta: cuando estaba
+ * duplicada, el Planner traducía la forma vieja y la sección Marca no, así que
+ * la misma regla se aplicaba en el drawer y aparecía como "mal configurada"
+ * dos secciones más abajo. Dos lecturas del mismo dato dando respuestas
+ * distintas es peor que cualquiera de las dos por separado.
+ *
+ * Devuelve `null` cuando de plano no se entiende. Quien llama decide si eso es
+ * una advertencia visible (Marca) o una regla que se salta (el verificador):
+ * esta función no toma esa decisión por nadie.
+ */
+export function normalizarParamsDeRegla(kind: string, params: unknown): CodeRuleParams | null {
+  const canonico = codeRuleParams.safeParse(params)
+  if (canonico.success) return canonico.data
+
+  if (typeof params !== 'object' || params === null) return null
+  const p = params as Record<string, unknown>
+
+  if (typeof p['exact'] === 'number') return { kind: 'hashtags_exact', count: p['exact'] }
+  if (typeof p['min'] === 'number' && typeof p['max'] === 'number') {
+    return { kind: 'hashtags_range', min: p['min'], max: p['max'] }
+  }
+  if (p['lowercase'] === true) return { kind: 'lowercase' }
+  if (Array.isArray(p['words']) && p['words'].every((w) => typeof w === 'string')) {
+    return { kind: 'banned_words', words: p['words'] as string[] }
+  }
+  if (kind === 'cta' && p['required'] === true) return { kind: 'required_cta' }
+
+  return null
+}

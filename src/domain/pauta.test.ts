@@ -1,3 +1,9 @@
+/**
+ * El partidor de CSV ya NO se prueba aquí: vive en `src/domain/csv.ts` y ahí
+ * tiene su suite. Existían dos implementaciones con dos juegos de pruebas —
+ * la de allá era más completa en números y esta manejaba mejor el BOM, así
+ * que ninguna de las dos era la buena por sí sola.
+ */
 import { describe, expect, it } from 'vitest'
 import {
   diaDeCampana,
@@ -9,7 +15,6 @@ import {
   mejorValor,
   METRICAS,
   parsearCsvDeAds,
-  partirCsv,
   pasosDeInstrucciones,
   pctPresupuestoGastado,
   pesosACentavos,
@@ -413,46 +418,6 @@ describe('seriesCostoPorResultado', () => {
 /* ==========================================================================
    CSV
    ========================================================================== */
-
-describe('partirCsv', () => {
-  it('respeta las comas dentro de comillas', () => {
-    // Sin esto, un nombre de ad set con coma corre todas las columnas de lugar.
-    expect(partirCsv('a,"B · Interés, 25-45",c')).toEqual([['a', 'B · Interés, 25-45', 'c']])
-  })
-
-  it('entiende CRLF y comillas escapadas', () => {
-    expect(partirCsv('x,y\r\n1,"di ""hola"""')).toEqual([
-      ['x', 'y'],
-      ['1', 'di "hola"'],
-    ])
-  })
-
-  it('descarta los renglones en blanco del final', () => {
-    expect(partirCsv('a,b\n1,2\n\n')).toHaveLength(2)
-  })
-
-  it('se traga el BOM que pone Excel en Windows', () => {
-    // Sin esto la primera columna se llama "﻿Ad set name" y no empata con
-    // ningún alias: el archivo se ve idéntico y la importación falla diciendo
-    // que falta la columna que sí está ahí.
-    const [encabezado] = partirCsv('﻿Ad set name,Day\nA,2026-07-26')
-    expect(encabezado?.[0]).toBe('Ad set name')
-  })
-
-  it('entiende el punto y coma de Excel en español', () => {
-    expect(partirCsv('a;b;c\n1;2;3')).toEqual([
-      ['a', 'b', 'c'],
-      ['1', '2', '3'],
-    ])
-  })
-
-  it('un punto y coma dentro de un campo no cambia el separador del archivo', () => {
-    expect(partirCsv('a,b\n"x; y",2')).toEqual([
-      ['a', 'b'],
-      ['x; y', '2'],
-    ])
-  })
-})
 
 describe('parsearCsvDeAds', () => {
   const meta = [
