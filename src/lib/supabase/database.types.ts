@@ -9,6 +9,419 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      account_audits: {
+        Row: {
+          client_id: string
+          created_at: string
+          findings: Json
+          id: string
+          org_id: string
+          platform: "instagram" | "facebook" | "tiktok" | "linkedin"
+          score: number
+        }
+        Insert: {
+          client_id: string
+          created_at?: string
+          findings?: Json
+          id?: string
+          org_id: string
+          platform: "instagram" | "facebook" | "tiktok" | "linkedin"
+          score: number
+        }
+        Update: {
+          client_id?: string
+          created_at?: string
+          findings?: Json
+          id?: string
+          org_id?: string
+          platform?: "instagram" | "facebook" | "tiktok" | "linkedin"
+          score?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "account_audits_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "account_audits_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ad_creatives: {
+        Row: {
+          ad_set_id: string
+          client_id: string
+          created_at: string
+          id: string
+          org_id: string
+          piece_id: string
+          status: "propuesto" | "activo" | "pausado"
+          updated_at: string
+        }
+        Insert: {
+          ad_set_id: string
+          client_id: string
+          created_at?: string
+          id?: string
+          org_id: string
+          piece_id: string
+          status?: "propuesto" | "activo" | "pausado"
+          updated_at?: string
+        }
+        Update: {
+          ad_set_id?: string
+          client_id?: string
+          created_at?: string
+          id?: string
+          org_id?: string
+          piece_id?: string
+          status?: "propuesto" | "activo" | "pausado"
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ad_creatives_ad_set_id_client_id_fkey"
+            columns: ["ad_set_id", "client_id"]
+            isOneToOne: false
+            referencedRelation: "ad_sets"
+            referencedColumns: ["id", "client_id"]
+          },
+          {
+            foreignKeyName: "ad_creatives_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ad_creatives_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ad_creatives_piece_id_client_id_fkey"
+            columns: ["piece_id", "client_id"]
+            isOneToOne: false
+            referencedRelation: "pieces"
+            referencedColumns: ["id", "client_id"]
+          },
+        ]
+      }
+      ad_metrics: {
+        Row: {
+          ad_set_id: string
+          clicks: number
+          client_id: string
+          cost_per_result_cents: number | null
+          cpc_cents: number | null
+          cpm_cents: number | null
+          created_at: string
+          ctr: number | null
+          date: string
+          id: string
+          impressions: number
+          org_id: string
+          reach: number
+          results: number
+          spend_cents: number
+          updated_at: string
+        }
+        Insert: {
+          ad_set_id: string
+          clicks?: number
+          client_id: string
+          cost_per_result_cents?: number | null
+          cpc_cents?: number | null
+          cpm_cents?: number | null
+          created_at?: string
+          ctr?: number | null
+          date: string
+          id?: string
+          impressions?: number
+          org_id: string
+          reach?: number
+          results?: number
+          spend_cents?: number
+          updated_at?: string
+        }
+        Update: {
+          ad_set_id?: string
+          clicks?: number
+          client_id?: string
+          cost_per_result_cents?: number | null
+          cpc_cents?: number | null
+          cpm_cents?: number | null
+          created_at?: string
+          ctr?: number | null
+          date?: string
+          id?: string
+          impressions?: number
+          org_id?: string
+          reach?: number
+          results?: number
+          spend_cents?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ad_metrics_ad_set_id_client_id_fkey"
+            columns: ["ad_set_id", "client_id"]
+            isOneToOne: false
+            referencedRelation: "ad_sets"
+            referencedColumns: ["id", "client_id"]
+          },
+          {
+            foreignKeyName: "ad_metrics_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ad_metrics_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ad_proposals: {
+        Row: {
+          ad_set_id: string | null
+          alternative: Json
+          applied_at: string | null
+          applied_note: string | null
+          approved_by: string | null
+          campaign_id: string
+          client_id: string
+          created_at: string
+          expected_impact: string | null
+          id: string
+          instructions: string | null
+          kind:
+            | "pausar"
+            | "reactivar"
+            | "mover_presupuesto"
+            | "subir_presupuesto"
+            | "bajar_presupuesto"
+            | "cambiar_creativo"
+            | "cambiar_publico"
+            | "extender"
+            | "cerrar"
+          org_id: string
+          rationale: string
+          risk: string | null
+          status:
+            | "propuesta"
+            | "aprobada"
+            | "aprobada_alternativa"
+            | "rechazada"
+            | "aplicada"
+          updated_at: string
+        }
+        Insert: {
+          ad_set_id?: string | null
+          alternative?: Json
+          applied_at?: string | null
+          applied_note?: string | null
+          approved_by?: string | null
+          campaign_id: string
+          client_id: string
+          created_at?: string
+          expected_impact?: string | null
+          id?: string
+          instructions?: string | null
+          kind:
+            | "pausar"
+            | "reactivar"
+            | "mover_presupuesto"
+            | "subir_presupuesto"
+            | "bajar_presupuesto"
+            | "cambiar_creativo"
+            | "cambiar_publico"
+            | "extender"
+            | "cerrar"
+          org_id: string
+          rationale: string
+          risk?: string | null
+          status?:
+            | "propuesta"
+            | "aprobada"
+            | "aprobada_alternativa"
+            | "rechazada"
+            | "aplicada"
+          updated_at?: string
+        }
+        Update: {
+          ad_set_id?: string | null
+          alternative?: Json
+          applied_at?: string | null
+          applied_note?: string | null
+          approved_by?: string | null
+          campaign_id?: string
+          client_id?: string
+          created_at?: string
+          expected_impact?: string | null
+          id?: string
+          instructions?: string | null
+          kind?:
+            | "pausar"
+            | "reactivar"
+            | "mover_presupuesto"
+            | "subir_presupuesto"
+            | "bajar_presupuesto"
+            | "cambiar_creativo"
+            | "cambiar_publico"
+            | "extender"
+            | "cerrar"
+          org_id?: string
+          rationale?: string
+          risk?: string | null
+          status?:
+            | "propuesta"
+            | "aprobada"
+            | "aprobada_alternativa"
+            | "rechazada"
+            | "aplicada"
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ad_proposals_ad_set_id_client_id_fkey"
+            columns: ["ad_set_id", "client_id"]
+            isOneToOne: false
+            referencedRelation: "ad_sets"
+            referencedColumns: ["id", "client_id"]
+          },
+          {
+            foreignKeyName: "ad_proposals_campaign_id_client_id_fkey"
+            columns: ["campaign_id", "client_id"]
+            isOneToOne: false
+            referencedRelation: "campaigns"
+            referencedColumns: ["id", "client_id"]
+          },
+          {
+            foreignKeyName: "ad_proposals_campaign_id_client_id_fkey"
+            columns: ["campaign_id", "client_id"]
+            isOneToOne: false
+            referencedRelation: "campaigns_para_cliente"
+            referencedColumns: ["id", "client_id"]
+          },
+          {
+            foreignKeyName: "ad_proposals_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ad_proposals_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ad_sets: {
+        Row: {
+          audience_def: Json
+          audience_type:
+            | "interes"
+            | "similares"
+            | "retargeting"
+            | "amplio"
+            | "personalizado"
+          budget_cents: number
+          campaign_id: string
+          client_id: string
+          created_at: string
+          id: string
+          name: string
+          org_id: string
+          spent_cents: number
+          status: "activo" | "pausado" | "cerrado"
+          updated_at: string
+        }
+        Insert: {
+          audience_def?: Json
+          audience_type:
+            | "interes"
+            | "similares"
+            | "retargeting"
+            | "amplio"
+            | "personalizado"
+          budget_cents?: number
+          campaign_id: string
+          client_id: string
+          created_at?: string
+          id?: string
+          name: string
+          org_id: string
+          spent_cents?: number
+          status?: "activo" | "pausado" | "cerrado"
+          updated_at?: string
+        }
+        Update: {
+          audience_def?: Json
+          audience_type?:
+            | "interes"
+            | "similares"
+            | "retargeting"
+            | "amplio"
+            | "personalizado"
+          budget_cents?: number
+          campaign_id?: string
+          client_id?: string
+          created_at?: string
+          id?: string
+          name?: string
+          org_id?: string
+          spent_cents?: number
+          status?: "activo" | "pausado" | "cerrado"
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ad_sets_campaign_id_client_id_fkey"
+            columns: ["campaign_id", "client_id"]
+            isOneToOne: false
+            referencedRelation: "campaigns"
+            referencedColumns: ["id", "client_id"]
+          },
+          {
+            foreignKeyName: "ad_sets_campaign_id_client_id_fkey"
+            columns: ["campaign_id", "client_id"]
+            isOneToOne: false
+            referencedRelation: "campaigns_para_cliente"
+            referencedColumns: ["id", "client_id"]
+          },
+          {
+            foreignKeyName: "ad_sets_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ad_sets_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       agent_policies: {
         Row: {
           agent:
@@ -352,6 +765,78 @@ export type Database = {
           },
         ]
       }
+      campaigns: {
+        Row: {
+          budget_cents: number
+          client_id: string
+          created_at: string
+          end_date: string
+          id: string
+          learned: string | null
+          learning_goal: string | null
+          name: string
+          objective: string
+          org_id: string
+          platform: "instagram" | "facebook" | "tiktok" | "linkedin"
+          result_metric: string | null
+          spent_cents: number
+          start_date: string
+          status: "borrador" | "activa" | "pausada" | "cerrada"
+          updated_at: string
+        }
+        Insert: {
+          budget_cents?: number
+          client_id: string
+          created_at?: string
+          end_date: string
+          id?: string
+          learned?: string | null
+          learning_goal?: string | null
+          name: string
+          objective: string
+          org_id: string
+          platform: "instagram" | "facebook" | "tiktok" | "linkedin"
+          result_metric?: string | null
+          spent_cents?: number
+          start_date: string
+          status?: "borrador" | "activa" | "pausada" | "cerrada"
+          updated_at?: string
+        }
+        Update: {
+          budget_cents?: number
+          client_id?: string
+          created_at?: string
+          end_date?: string
+          id?: string
+          learned?: string | null
+          learning_goal?: string | null
+          name?: string
+          objective?: string
+          org_id?: string
+          platform?: "instagram" | "facebook" | "tiktok" | "linkedin"
+          result_metric?: string | null
+          spent_cents?: number
+          start_date?: string
+          status?: "borrador" | "activa" | "pausada" | "cerrada"
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "campaigns_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "campaigns_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       client_users: {
         Row: {
           client_id: string
@@ -666,6 +1151,57 @@ export type Database = {
           },
         ]
       }
+      events: {
+        Row: {
+          client_id: string
+          created_at: string
+          id: string
+          notes: string | null
+          org_id: string
+          place: string | null
+          scheduled_on: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          client_id: string
+          created_at?: string
+          id?: string
+          notes?: string | null
+          org_id: string
+          place?: string | null
+          scheduled_on: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          client_id?: string
+          created_at?: string
+          id?: string
+          notes?: string | null
+          org_id?: string
+          place?: string | null
+          scheduled_on?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "events_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "events_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       human_edits: {
         Row: {
           agent:
@@ -760,6 +1296,78 @@ export type Database = {
             columns: ["run_id"]
             isOneToOne: false
             referencedRelation: "agent_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      key_dates: {
+        Row: {
+          campaign_idea: string | null
+          client_id: string
+          created_at: string
+          date: string
+          has_budget: boolean
+          id: string
+          kind:
+            | "festividad"
+            | "aniversario"
+            | "evento"
+            | "promocion"
+            | "temporada"
+          notes: string | null
+          org_id: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          campaign_idea?: string | null
+          client_id: string
+          created_at?: string
+          date: string
+          has_budget?: boolean
+          id?: string
+          kind:
+            | "festividad"
+            | "aniversario"
+            | "evento"
+            | "promocion"
+            | "temporada"
+          notes?: string | null
+          org_id: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          campaign_idea?: string | null
+          client_id?: string
+          created_at?: string
+          date?: string
+          has_budget?: boolean
+          id?: string
+          kind?:
+            | "festividad"
+            | "aniversario"
+            | "evento"
+            | "promocion"
+            | "temporada"
+          notes?: string | null
+          org_id?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "key_dates_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "key_dates_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
             referencedColumns: ["id"]
           },
         ]
@@ -1086,6 +1694,294 @@ export type Database = {
           },
         ]
       }
+      results_monthly: {
+        Row: {
+          client_id: string
+          created_at: string
+          id: string
+          impressions: number
+          interactions: number
+          link_clicks: number
+          month: string
+          new_followers: number
+          org_id: string
+          profile_visits: number
+          reach: number
+          saves: number
+          shares: number
+          source: "manual" | "csv" | "api"
+          updated_at: string
+        }
+        Insert: {
+          client_id: string
+          created_at?: string
+          id?: string
+          impressions?: number
+          interactions?: number
+          link_clicks?: number
+          month: string
+          new_followers?: number
+          org_id: string
+          profile_visits?: number
+          reach?: number
+          saves?: number
+          shares?: number
+          source?: "manual" | "csv" | "api"
+          updated_at?: string
+        }
+        Update: {
+          client_id?: string
+          created_at?: string
+          id?: string
+          impressions?: number
+          interactions?: number
+          link_clicks?: number
+          month?: string
+          new_followers?: number
+          org_id?: string
+          profile_visits?: number
+          reach?: number
+          saves?: number
+          shares?: number
+          source?: "manual" | "csv" | "api"
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "results_monthly_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "results_monthly_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      results_piece: {
+        Row: {
+          client_id: string
+          created_at: string
+          id: string
+          impressions: number
+          interactions: number
+          measured_at: string
+          org_id: string
+          piece_id: string
+          reach: number
+          saves: number
+          shares: number
+        }
+        Insert: {
+          client_id: string
+          created_at?: string
+          id?: string
+          impressions?: number
+          interactions?: number
+          measured_at?: string
+          org_id: string
+          piece_id: string
+          reach?: number
+          saves?: number
+          shares?: number
+        }
+        Update: {
+          client_id?: string
+          created_at?: string
+          id?: string
+          impressions?: number
+          interactions?: number
+          measured_at?: string
+          org_id?: string
+          piece_id?: string
+          reach?: number
+          saves?: number
+          shares?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "results_piece_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "results_piece_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "results_piece_piece_id_client_id_fkey"
+            columns: ["piece_id", "client_id"]
+            isOneToOne: false
+            referencedRelation: "pieces"
+            referencedColumns: ["id", "client_id"]
+          },
+        ]
+      }
+      scripts: {
+        Row: {
+          alternative: string | null
+          client_id: string
+          created_at: string
+          duration_s: number | null
+          fit_reason: string | null
+          fit_score: number | null
+          id: string
+          org_id: string
+          piece_id: string | null
+          requirements: string | null
+          scenes: Json
+          status: "propuesto" | "aceptado" | "editado" | "descartado"
+          trend_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          alternative?: string | null
+          client_id: string
+          created_at?: string
+          duration_s?: number | null
+          fit_reason?: string | null
+          fit_score?: number | null
+          id?: string
+          org_id: string
+          piece_id?: string | null
+          requirements?: string | null
+          scenes?: Json
+          status?: "propuesto" | "aceptado" | "editado" | "descartado"
+          trend_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          alternative?: string | null
+          client_id?: string
+          created_at?: string
+          duration_s?: number | null
+          fit_reason?: string | null
+          fit_score?: number | null
+          id?: string
+          org_id?: string
+          piece_id?: string | null
+          requirements?: string | null
+          scenes?: Json
+          status?: "propuesto" | "aceptado" | "editado" | "descartado"
+          trend_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "scripts_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "scripts_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "scripts_piece_id_client_id_fkey"
+            columns: ["piece_id", "client_id"]
+            isOneToOne: false
+            referencedRelation: "pieces"
+            referencedColumns: ["id", "client_id"]
+          },
+          {
+            foreignKeyName: "scripts_trend_id_org_id_fkey"
+            columns: ["trend_id", "org_id"]
+            isOneToOne: false
+            referencedRelation: "trends"
+            referencedColumns: ["id", "org_id"]
+          },
+        ]
+      }
+      social_accounts: {
+        Row: {
+          checked_at: string | null
+          client_id: string
+          created_at: string
+          followers: number
+          followers_delta: number
+          handle: string | null
+          id: string
+          last_post_at: string | null
+          org_id: string
+          platform: "instagram" | "facebook" | "tiktok" | "linkedin"
+          posts_per_week: number
+          profile_checklist: Json
+          target_per_week: number
+          unanswered_comments: number
+          unanswered_dms: number
+          updated_at: string
+          url: string | null
+        }
+        Insert: {
+          checked_at?: string | null
+          client_id: string
+          created_at?: string
+          followers?: number
+          followers_delta?: number
+          handle?: string | null
+          id?: string
+          last_post_at?: string | null
+          org_id: string
+          platform: "instagram" | "facebook" | "tiktok" | "linkedin"
+          posts_per_week?: number
+          profile_checklist?: Json
+          target_per_week?: number
+          unanswered_comments?: number
+          unanswered_dms?: number
+          updated_at?: string
+          url?: string | null
+        }
+        Update: {
+          checked_at?: string | null
+          client_id?: string
+          created_at?: string
+          followers?: number
+          followers_delta?: number
+          handle?: string | null
+          id?: string
+          last_post_at?: string | null
+          org_id?: string
+          platform?: "instagram" | "facebook" | "tiktok" | "linkedin"
+          posts_per_week?: number
+          profile_checklist?: Json
+          target_per_week?: number
+          unanswered_comments?: number
+          unanswered_dms?: number
+          updated_at?: string
+          url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "social_accounts_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "social_accounts_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       stories: {
         Row: {
           client_id: string
@@ -1158,9 +2054,225 @@ export type Database = {
           },
         ]
       }
+      tasks: {
+        Row: {
+          client_id: string
+          created_at: string
+          depends_on: "yo" | "cliente" | "agente"
+          due_date: string | null
+          id: string
+          org_id: string
+          status: "pendiente" | "en_curso" | "bloqueada" | "hecha"
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          client_id: string
+          created_at?: string
+          depends_on?: "yo" | "cliente" | "agente"
+          due_date?: string | null
+          id?: string
+          org_id: string
+          status?: "pendiente" | "en_curso" | "bloqueada" | "hecha"
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          client_id?: string
+          created_at?: string
+          depends_on?: "yo" | "cliente" | "agente"
+          due_date?: string | null
+          id?: string
+          org_id?: string
+          status?: "pendiente" | "en_curso" | "bloqueada" | "hecha"
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tasks_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      trends: {
+        Row: {
+          audio_url: string | null
+          created_at: string
+          id: string
+          kind: "audio" | "formato" | "reto" | "tema"
+          momentum: "subiendo" | "pico" | "bajando"
+          notes: string | null
+          org_id: string
+          platform: "instagram" | "facebook" | "tiktok" | "linkedin"
+          reference_url: string | null
+          spotted_at: string
+          spotted_by: string | null
+          title: string
+          updated_at: string
+          verticals: string[]
+        }
+        Insert: {
+          audio_url?: string | null
+          created_at?: string
+          id?: string
+          kind: "audio" | "formato" | "reto" | "tema"
+          momentum?: "subiendo" | "pico" | "bajando"
+          notes?: string | null
+          org_id: string
+          platform: "instagram" | "facebook" | "tiktok" | "linkedin"
+          reference_url?: string | null
+          spotted_at?: string
+          spotted_by?: string | null
+          title: string
+          updated_at?: string
+          verticals?: string[]
+        }
+        Update: {
+          audio_url?: string | null
+          created_at?: string
+          id?: string
+          kind?: "audio" | "formato" | "reto" | "tema"
+          momentum?: "subiendo" | "pico" | "bajando"
+          notes?: string | null
+          org_id?: string
+          platform?: "instagram" | "facebook" | "tiktok" | "linkedin"
+          reference_url?: string | null
+          spotted_at?: string
+          spotted_by?: string | null
+          title?: string
+          updated_at?: string
+          verticals?: string[]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "trends_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      volume_plans: {
+        Row: {
+          approved_at: string | null
+          approved_by: string | null
+          capacity_declared: number | null
+          client_id: string
+          created_at: string
+          feed_counts: Json
+          id: string
+          month: string
+          org_id: string
+          pillar_mix: Json
+          rationale: Json
+          story_counts: Json
+          updated_at: string
+        }
+        Insert: {
+          approved_at?: string | null
+          approved_by?: string | null
+          capacity_declared?: number | null
+          client_id: string
+          created_at?: string
+          feed_counts?: Json
+          id?: string
+          month: string
+          org_id: string
+          pillar_mix?: Json
+          rationale?: Json
+          story_counts?: Json
+          updated_at?: string
+        }
+        Update: {
+          approved_at?: string | null
+          approved_by?: string | null
+          capacity_declared?: number | null
+          client_id?: string
+          created_at?: string
+          feed_counts?: Json
+          id?: string
+          month?: string
+          org_id?: string
+          pillar_mix?: Json
+          rationale?: Json
+          story_counts?: Json
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "volume_plans_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "volume_plans_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
-      [_ in never]: never
+      campaigns_para_cliente: {
+        Row: {
+          client_id: string | null
+          end_date: string | null
+          id: string | null
+          name: string | null
+          objective: string | null
+          platform: "instagram" | "facebook" | "tiktok" | "linkedin" | null
+          result_metric: string | null
+          start_date: string | null
+          status: "borrador" | "activa" | "pausada" | "cerrada" | null
+        }
+        Insert: {
+          client_id?: string | null
+          end_date?: string | null
+          id?: string | null
+          name?: string | null
+          objective?: string | null
+          platform?: "instagram" | "facebook" | "tiktok" | "linkedin" | null
+          result_metric?: string | null
+          start_date?: string | null
+          status?: "borrador" | "activa" | "pausada" | "cerrada" | null
+        }
+        Update: {
+          client_id?: string | null
+          end_date?: string | null
+          id?: string | null
+          name?: string | null
+          objective?: string | null
+          platform?: "instagram" | "facebook" | "tiktok" | "linkedin" | null
+          result_metric?: string | null
+          start_date?: string | null
+          status?: "borrador" | "activa" | "pausada" | "cerrada" | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "campaigns_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       [_ in never]: never

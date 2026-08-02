@@ -21,11 +21,27 @@ const isDev = process.env.NODE_ENV === 'development'
  * que estar en la lista blanca de Supabase y la de un preview efímero nunca
  * lo va a estar.
  */
-const siteUrl =
-  process.env.NEXT_PUBLIC_SITE_URL ||
-  (process.env.VERCEL_PROJECT_PRODUCTION_URL
-    ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
-    : 'http://localhost:3000')
+const urlDeVercel = process.env.VERCEL_PROJECT_PRODUCTION_URL
+  ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+  : undefined
+
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || urlDeVercel || 'http://localhost:3000'
+
+/**
+ * Solo se inyecta cuando la derivamos nosotros.
+ *
+ * OJO, esto ya mordió una vez: `next.config.ts` se evalúa ANTES de que Next
+ * cargue los archivos `.env`, así que aquí `process.env.NEXT_PUBLIC_SITE_URL`
+ * viene vacía aunque esté en `.env.local`. Si inyectáramos siempre, el valor
+ * del archivo quedaría pisado por el fallback a localhost.
+ *
+ * El síntoma fue de los peores: el magic link redirigía a `localhost` mientras
+ * el navegador estaba en `127.0.0.1`. Son orígenes distintos para las cookies,
+ * así que la sesión se escribía en uno y se leía en el otro, y el login
+ * "fallaba" sin un solo error en consola.
+ */
+const envInyectado =
+  !process.env.NEXT_PUBLIC_SITE_URL && urlDeVercel ? { NEXT_PUBLIC_SITE_URL: urlDeVercel } : {}
 
 /**
  * ¿Nos sirven sobre TLS de verdad?
@@ -86,8 +102,7 @@ const nextConfig: NextConfig = {
   // decimos y de paso evitamos que suba de directorio buscando otra.
   turbopack: { root: import.meta.dirname },
 
-  // Se inyecta ya resuelta para que `env.ts` la vea igual en local y en Vercel.
-  env: { NEXT_PUBLIC_SITE_URL: siteUrl },
+  env: envInyectado,
 
   // A type error must never reach production. Lint runs as its own CI gate
   // (Next 16 no longer runs ESLint during `next build`).

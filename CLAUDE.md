@@ -109,6 +109,14 @@ Detalle completo en `docs/security.md`. Lo que hay que tener en la cabeza siempr
 - Componentes: Server Components por default. `'use client'` solo cuando de verdad hace falta interacción, y lo más abajo posible en el árbol.
 - Mutaciones: Server Actions con validación Zod. Nada de escribir a la base desde el navegador.
 
+**Tres trampas que ya mordieron, con nombre y apellido**
+
+Están documentadas en el código donde importan, pero conviene tenerlas en la cabeza:
+
+1. **Constantes que cruzan la frontera cliente/servidor van en un módulo sin directiva.** Si un Server Component importa un `export const` de un archivo con `'use client'`, React le entrega una referencia serializable en vez del valor: `SECCIONES.map is not a function`, en runtime, en producción, y TypeScript no dice nada. Por eso `src/domain/secciones.ts` existe aparte del componente de navegación.
+2. **Redirects con `Location` relativo.** Ni `request.nextUrl.origin` ni `request.url` son de fiar: reflejan cómo se llama el servidor a sí mismo, no el host por el que entró la petición. Un redirect a `localhost` cuando el navegador está en `127.0.0.1` cruza de origen y tira la cookie de sesión — login roto, cero errores en consola.
+3. **`FormData.get()` devuelve `null`, no `undefined`.** Un campo opcional se valida con `.nullish()`, no con `.optional()`. Con `.optional()` el formulario truena justo cuando el campo no viene, que suele ser el camino más común.
+
 **Comentarios**
 
 Explican **por qué**, no qué. Un comentario que repite el código es ruido que envejece mal. Comenta la decisión no obvia, la trampa, el caso que ya mordió. Mira `src/lib/time.ts` o `src/domain/brand-rules.ts` para el tono.
