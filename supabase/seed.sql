@@ -48,7 +48,27 @@ from (values
   -- el síntoma es un otp_expired intermitente que parece bug de la app.
   ('11111111-0000-4000-8000-000000000005'::uuid, 'e2e-planner@ejemplo.test', 'E2E Planner'),
   ('11111111-0000-4000-8000-000000000006'::uuid, 'e2e-portal@ejemplo.test',  'E2E Portal'),
-  ('11111111-0000-4000-8000-000000000007'::uuid, 'e2e-arrastre@ejemplo.test', 'E2E Arrastre')
+  -- Un buzón por worker de Playwright. El magic link es de un solo uso, así
+  -- que dos pruebas concurrentes que compartan correo se lo consumen entre
+  -- ellas; el síntoma es un otp_expired intermitente que parece bug de la app.
+  -- Playwright nunca corre dos pruebas en el mismo worker a la vez, así que
+  -- con uno por worker la colisión es imposible por construcción.
+  ('11111111-0000-4000-8000-000000000020'::uuid, 'e2e-w0@ejemplo.test', 'E2E w0'),
+  ('11111111-0000-4000-8000-000000000021'::uuid, 'e2e-w1@ejemplo.test', 'E2E w1'),
+  ('11111111-0000-4000-8000-000000000022'::uuid, 'e2e-w2@ejemplo.test', 'E2E w2'),
+  ('11111111-0000-4000-8000-000000000023'::uuid, 'e2e-w3@ejemplo.test', 'E2E w3'),
+  ('11111111-0000-4000-8000-000000000024'::uuid, 'e2e-w4@ejemplo.test', 'E2E w4'),
+  ('11111111-0000-4000-8000-000000000025'::uuid, 'e2e-w5@ejemplo.test', 'E2E w5'),
+  ('11111111-0000-4000-8000-000000000026'::uuid, 'e2e-w6@ejemplo.test', 'E2E w6'),
+  ('11111111-0000-4000-8000-000000000027'::uuid, 'e2e-w7@ejemplo.test', 'E2E w7'),
+  ('11111111-0000-4000-8000-000000000028'::uuid, 'e2e-w8@ejemplo.test', 'E2E w8'),
+  ('11111111-0000-4000-8000-000000000029'::uuid, 'e2e-w9@ejemplo.test', 'E2E w9'),
+  ('11111111-0000-4000-8000-000000000030'::uuid, 'e2e-w10@ejemplo.test', 'E2E w10'),
+  ('11111111-0000-4000-8000-000000000031'::uuid, 'e2e-w11@ejemplo.test', 'E2E w11'),
+  ('11111111-0000-4000-8000-000000000032'::uuid, 'e2e-w12@ejemplo.test', 'E2E w12'),
+  ('11111111-0000-4000-8000-000000000033'::uuid, 'e2e-w13@ejemplo.test', 'E2E w13'),
+  ('11111111-0000-4000-8000-000000000034'::uuid, 'e2e-w14@ejemplo.test', 'E2E w14'),
+  ('11111111-0000-4000-8000-000000000035'::uuid, 'e2e-w15@ejemplo.test', 'E2E w15')
 ) as u(id, email, name)
 on conflict (id) do nothing;
 
@@ -71,12 +91,27 @@ insert into public.orgs (id, slug, name) values
 on conflict (id) do nothing;
 
 insert into public.org_members (org_id, user_id, role) values
+  -- Todos los usuarios de prueba necesitan ser staff: mover una pieza pasa
+  -- por `app.is_staff_of_client`, y sin membresía la función se niega.
   ('aaaaaaaa-0000-4000-8000-000000000001', '11111111-0000-4000-8000-000000000001', 'owner'),
   ('aaaaaaaa-0000-4000-8000-000000000001', '11111111-0000-4000-8000-000000000002', 'staff'),
   ('aaaaaaaa-0000-4000-8000-000000000001', '11111111-0000-4000-8000-000000000005', 'staff'),
-  -- El usuario de la prueba de arrastre necesita ser staff: mover una pieza
-  -- pasa por `app.is_staff_of_client`, y sin membresía la función se niega.
-  ('aaaaaaaa-0000-4000-8000-000000000001', '11111111-0000-4000-8000-000000000007', 'staff')
+  ('aaaaaaaa-0000-4000-8000-000000000001', '11111111-0000-4000-8000-000000000020', 'staff'),
+  ('aaaaaaaa-0000-4000-8000-000000000001', '11111111-0000-4000-8000-000000000021', 'staff'),
+  ('aaaaaaaa-0000-4000-8000-000000000001', '11111111-0000-4000-8000-000000000022', 'staff'),
+  ('aaaaaaaa-0000-4000-8000-000000000001', '11111111-0000-4000-8000-000000000023', 'staff'),
+  ('aaaaaaaa-0000-4000-8000-000000000001', '11111111-0000-4000-8000-000000000024', 'staff'),
+  ('aaaaaaaa-0000-4000-8000-000000000001', '11111111-0000-4000-8000-000000000025', 'staff'),
+  ('aaaaaaaa-0000-4000-8000-000000000001', '11111111-0000-4000-8000-000000000026', 'staff'),
+  ('aaaaaaaa-0000-4000-8000-000000000001', '11111111-0000-4000-8000-000000000027', 'staff'),
+  ('aaaaaaaa-0000-4000-8000-000000000001', '11111111-0000-4000-8000-000000000028', 'staff'),
+  ('aaaaaaaa-0000-4000-8000-000000000001', '11111111-0000-4000-8000-000000000029', 'staff'),
+  ('aaaaaaaa-0000-4000-8000-000000000001', '11111111-0000-4000-8000-000000000030', 'staff'),
+  ('aaaaaaaa-0000-4000-8000-000000000001', '11111111-0000-4000-8000-000000000031', 'staff'),
+  ('aaaaaaaa-0000-4000-8000-000000000001', '11111111-0000-4000-8000-000000000032', 'staff'),
+  ('aaaaaaaa-0000-4000-8000-000000000001', '11111111-0000-4000-8000-000000000033', 'staff'),
+  ('aaaaaaaa-0000-4000-8000-000000000001', '11111111-0000-4000-8000-000000000034', 'staff'),
+  ('aaaaaaaa-0000-4000-8000-000000000001', '11111111-0000-4000-8000-000000000035', 'staff')
 on conflict do nothing;
 
 -- --- Clientes ficticios --------------------------------------------------------
