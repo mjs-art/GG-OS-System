@@ -23,7 +23,20 @@ async function contarPendientes(): Promise<number> {
   return count ?? 0
 }
 
+/**
+ * Si te invitaron al equipo mientras ya tenías sesión abierta, el callback de
+ * `/auth/callback` no corre de nuevo — ahí normalmente se acepta la
+ * invitación. Este es el otro lugar donde puede pasar: en cuanto recargas
+ * cualquier página del estudio. Silenciosamente, porque una invitación que no
+ * existe no es un error de nadie.
+ */
+async function aceptarInvitacionesPendientes(): Promise<void> {
+  const supabase = await createClient()
+  await supabase.rpc('accept_pending_invites')
+}
+
 export default async function EstudioLayout({ children }: { children: React.ReactNode }) {
+  await aceptarInvitacionesPendientes()
   const pendientes = await contarPendientes()
 
   return (

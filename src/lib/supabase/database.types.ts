@@ -1420,6 +1420,44 @@ export type Database = {
           },
         ]
       }
+      org_invites: {
+        Row: {
+          accepted_at: string | null
+          created_at: string
+          email: string
+          id: string
+          invited_by: string | null
+          org_id: string
+          role: "owner" | "staff"
+        }
+        Insert: {
+          accepted_at?: string | null
+          created_at?: string
+          email: string
+          id?: string
+          invited_by?: string | null
+          org_id: string
+          role?: "owner" | "staff"
+        }
+        Update: {
+          accepted_at?: string | null
+          created_at?: string
+          email?: string
+          id?: string
+          invited_by?: string | null
+          org_id?: string
+          role?: "owner" | "staff"
+        }
+        Relationships: [
+          {
+            foreignKeyName: "org_invites_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       org_members: {
         Row: {
           created_at: string
@@ -2383,6 +2421,7 @@ export type Database = {
       }
     }
     Functions: {
+      accept_pending_invites: { Args: never; Returns: undefined }
       edit_piece_field: {
         Args: {
           p_field: string

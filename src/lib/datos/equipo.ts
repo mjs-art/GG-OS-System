@@ -45,6 +45,40 @@ export function nombreProvisional(userId: string): string {
   return `Miembro ${userId.slice(-8)}`
 }
 
+export interface InvitacionPendiente {
+  id: string
+  email: string
+  role: RolDeEquipo
+  createdAt: string
+}
+
+/**
+ * Invitaciones que ya se mandaron pero nadie ha aceptado. RLS de `org_invites`
+ * usa el mismo criterio que `org_members`: solo el owner las ve, así que un
+ * staff que llame esto de vuelta se queda con la lista vacía, no con un error.
+ */
+export async function listarInvitacionesPendientes(orgId: string): Promise<InvitacionPendiente[]> {
+  const supabase = await createClient()
+
+  const { data, error } = await supabase
+    .from('org_invites')
+    .select('id, email, role, created_at')
+    .eq('org_id', orgId)
+    .is('accepted_at', null)
+    .order('created_at')
+
+  if (error) {
+    throw new Error(`No se pudieron leer las invitaciones pendientes: ${error.message}`)
+  }
+
+  return (data ?? []).map((i) => ({
+    id: i.id,
+    email: i.email,
+    role: i.role,
+    createdAt: i.created_at,
+  }))
+}
+
 export async function listarEquipo(orgId: string): Promise<MiembroDelEstudio[]> {
   const supabase = await createClient()
 
