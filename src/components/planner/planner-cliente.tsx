@@ -1,5 +1,6 @@
 'use client'
 
+import { useRouter } from 'next/navigation'
 import { useCallback, useMemo, useState, useTransition } from 'react'
 import { toast } from 'sonner'
 import { RejillaMes, type EntradaCalendario } from '@/components/calendario/rejilla-mes'
@@ -104,6 +105,60 @@ export function PlannerCliente({
   const [contentMap, setContentMap] = useState(false)
   const [modo, setModo] = useState<ModoArrastre>('intercambiar')
   const [abierta, setAbierta] = useState<string | null>(null)
+  const [corriendo, setCorriendo] = useState(false)
+  const router = useRouter()
+
+  /**
+   * Correr un agente sobre la pieza abierta. Hoy solo el Redactor está enchufado
+   * a Claude; los demás siguen anunciando "todavía no está encendido" en vez de
+   * rellenar campos con texto inventado. La corrida propone un borrador y lo
+   * escribe con su marca de procedencia; la persona lo revisa y aprueba.
+   */
+  const alAccionDeAgente = useCallback(
+    async (accion: AccionDeAgente) => {
+      if (accion.agente !== 'redactor') {
+        toast(`${AGENT_LABEL[accion.agente]} todavía no está encendido para este cliente.`, {
+          description:
+            'Enciéndelo en Agentes. Cuando corra, su propuesta llega a la Bandeja y tú decides si entra.',
+        })
+        return
+      }
+      if (!abierta || corriendo) return
+      setCorriendo(true)
+      const pieceId = abierta
+      try {
+        const res = await fetch('/api/jobs/redactor', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ pieceId }),
+        })
+        const r = (await res.json()) as
+          | { ok: true; tipo: 'escrito' }
+          | { ok: true; tipo: 'escalado'; pregunta: string }
+          | { ok: false; message: string }
+        if (r.ok && r.tipo === 'escrito') {
+          toast.success('El Redactor escribió el hook y el copy.', {
+            description: 'Ábrela de nuevo para revisar y aprobar.',
+          })
+          setAbierta(null)
+          router.refresh()
+        } else if (r.ok && r.tipo === 'escalado') {
+          toast('El Redactor tiene una pregunta', {
+            description: `${r.pregunta} — la respondes en la Bandeja.`,
+          })
+        } else if (!r.ok) {
+          toast.error('No se pudo correr el Redactor', { description: r.message })
+        }
+      } catch {
+        toast.error('No se pudo correr el Redactor', {
+          description: 'Falló la conexión. Inténtalo de nuevo.',
+        })
+      } finally {
+        setCorriendo(false)
+      }
+    },
+    [abierta, corriendo, router],
+  )
   const [, empezarTransicion] = useTransition()
 
   // El servidor es la verdad. Cuando un Server Action revalida, la página llega
@@ -563,23 +618,10 @@ export function PlannerCliente({
         contexto={contexto}
         onCerrar={() => setAbierta(null)}
         onGuardar={alGuardar}
-        onAccionDeAgente={anunciarAgente}
+        onAccionDeAgente={alAccionDeAgente}
       />
     </>
   )
-}
-
-/**
- * El agente propone, la persona ejecuta — y en esta etapa el agente todavía no
- * corre. Se dice con nombre y con el siguiente paso, en vez de rellenar los
- * campos con texto inventado: un borrador falso guardado en la base es
- * indistinguible de uno real tres semanas después.
- */
-function anunciarAgente(accion: AccionDeAgente) {
-  toast(`${AGENT_LABEL[accion.agente]} todavía no está encendido para este cliente.`, {
-    description:
-      'Enciéndelo en Agentes. Cuando corra, su propuesta llega a la Bandeja y tú decides si entra.',
-  })
 }
 
 /** Espeja en memoria lo que el Server Action va a hacer en la base. */
