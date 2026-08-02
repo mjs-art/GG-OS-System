@@ -1482,7 +1482,10 @@ export type Database = {
       }
       pieces: {
         Row: {
+          asset_source: string | null
           asset_status: "pendiente" | "recibido"
+          asset_url: string | null
+          assignee_id: string | null
           authored_by: Json
           boosted: boolean
           client_id: string
@@ -1491,6 +1494,7 @@ export type Database = {
           created_at: string
           cta: string | null
           date_locked: boolean
+          due_date: string | null
           format: "post" | "carrusel" | "reel"
           hashtags: string[]
           hook: string | null
@@ -1503,6 +1507,7 @@ export type Database = {
           publish_at: string | null
           script: string | null
           slot_index: number
+          sprint_id: string | null
           status:
             | "idea"
             | "escrito"
@@ -1513,7 +1518,10 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          asset_source?: string | null
           asset_status?: "pendiente" | "recibido"
+          asset_url?: string | null
+          assignee_id?: string | null
           authored_by?: Json
           boosted?: boolean
           client_id: string
@@ -1522,6 +1530,7 @@ export type Database = {
           created_at?: string
           cta?: string | null
           date_locked?: boolean
+          due_date?: string | null
           format: "post" | "carrusel" | "reel"
           hashtags?: string[]
           hook?: string | null
@@ -1534,6 +1543,7 @@ export type Database = {
           publish_at?: string | null
           script?: string | null
           slot_index?: number
+          sprint_id?: string | null
           status?:
             | "idea"
             | "escrito"
@@ -1544,7 +1554,10 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          asset_source?: string | null
           asset_status?: "pendiente" | "recibido"
+          asset_url?: string | null
+          assignee_id?: string | null
           authored_by?: Json
           boosted?: boolean
           client_id?: string
@@ -1553,6 +1566,7 @@ export type Database = {
           created_at?: string
           cta?: string | null
           date_locked?: boolean
+          due_date?: string | null
           format?: "post" | "carrusel" | "reel"
           hashtags?: string[]
           hook?: string | null
@@ -1565,6 +1579,7 @@ export type Database = {
           publish_at?: string | null
           script?: string | null
           slot_index?: number
+          sprint_id?: string | null
           status?:
             | "idea"
             | "escrito"
@@ -1594,6 +1609,13 @@ export type Database = {
             columns: ["pillar_id"]
             isOneToOne: false
             referencedRelation: "pillars"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pieces_sprint_id_fkey"
+            columns: ["sprint_id"]
+            isOneToOne: false
+            referencedRelation: "sprints"
             referencedColumns: ["id"]
           },
         ]
@@ -1975,6 +1997,44 @@ export type Database = {
           },
           {
             foreignKeyName: "social_accounts_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sprints: {
+        Row: {
+          created_at: string
+          ends_on: string
+          id: string
+          name: string
+          org_id: string
+          starts_on: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          ends_on: string
+          id?: string
+          name: string
+          org_id: string
+          starts_on: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          ends_on?: string
+          id?: string
+          name?: string
+          org_id?: string
+          starts_on?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sprints_org_id_fkey"
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "orgs"

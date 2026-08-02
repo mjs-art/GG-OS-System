@@ -10,7 +10,14 @@ import type { PieceFormat, PieceStatus, Platform } from '@/domain/labels'
  * `src/domain/secciones.ts`.
  */
 
-export type { Cliente, Pieza, Pilar, Story } from '@/lib/datos/clientes'
+export type { AssetSource, Cliente, Pieza, Pilar, Story } from '@/lib/datos/clientes'
+// Solo tipos: `export type` se borra al compilar, así que los módulos
+// `server-only` de los que salen nunca llegan al bundle del navegador.
+export type { MiembroDelEstudio } from '@/lib/datos/equipo'
+export type { SprintPlanner } from '@/lib/datos/planner'
+
+/** Las URLs listas para pintar, por id de pieza. Las firma el servidor. */
+export type UrlsDeAssets = Readonly<Record<string, string>>
 
 export type SubVista = 'grid' | 'calendario' | 'tabla' | 'stories'
 

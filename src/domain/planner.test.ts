@@ -5,7 +5,10 @@ import {
   agenteDelCampo,
   balancePilares,
   conteoStories,
+  diasDeAtraso,
+  entregaEnRiesgo,
   esDelPipeline,
+  estadoDeEntrega,
   ordenarFilas,
   ordenarParaGrid,
   reordenar,
@@ -282,11 +285,15 @@ describe('ordenarFilas', () => {
   const fila = (over: Partial<FilaTabla>): FilaTabla => ({
     id: 'x',
     fecha: '2026-09-01',
+    entrega: '2026-08-29',
+    entregaEstado: 'por-entregar',
     formato: 'post',
     pilar: 'Ambiente',
     hook: 'hook',
     estado: 'idea',
     ordenEstado: 0,
+    responsable: 'Ana',
+    sprint: 'Sprint 12',
     plataformas: ['instagram'],
     procedencia: 'Redactor',
     aprobacion: 'Pendiente',
@@ -316,10 +323,102 @@ describe('ordenarFilas', () => {
     expect(ordenarFilas(filas, 'fecha', 'desc').at(0)?.id).toBe('sin')
   })
 
+  it('las entregas sin fecha quedan al final en las dos direcciones', () => {
+    const filas = [
+      fila({ id: 'sin', entrega: null }),
+      fila({ id: 'temprana', entrega: '2026-08-20' }),
+      fila({ id: 'tardia', entrega: '2026-09-20' }),
+    ]
+    expect(ordenarFilas(filas, 'entrega', 'asc').map((f) => f.id)).toEqual([
+      'temprana',
+      'tardia',
+      'sin',
+    ])
+    expect(ordenarFilas(filas, 'entrega', 'desc').at(0)?.id).toBe('sin')
+  })
+
+  it('lo que no tiene responsable ni sprint se va al final, no entre los nombres', () => {
+    const filas = [
+      fila({ id: 'nadie', responsable: null, sprint: null }),
+      fila({ id: 'zoe', responsable: 'Zoe', sprint: 'Zeta' }),
+      fila({ id: 'ana', responsable: 'Ana', sprint: 'Alfa' }),
+    ]
+    expect(ordenarFilas(filas, 'responsable', 'asc').map((f) => f.id)).toEqual([
+      'ana',
+      'zoe',
+      'nadie',
+    ])
+    expect(ordenarFilas(filas, 'sprint', 'asc').map((f) => f.id)).toEqual(['ana', 'zoe', 'nadie'])
+  })
+
   it('no muta el arreglo que recibe', () => {
     const filas = [fila({ id: 'b', hook: 'b' }), fila({ id: 'a', hook: 'a' })]
     ordenarFilas(filas, 'hook', 'asc')
     expect(filas.map((f) => f.id)).toEqual(['b', 'a'])
+  })
+})
+
+describe('estadoDeEntrega', () => {
+  const HOY = '2026-09-14'
+
+  it('sin fecha de entrega y sin asset: no hay compromiso que perseguir', () => {
+    expect(estadoDeEntrega({ dueDate: null, assetUrl: null }, HOY)).toBe('sin-entrega')
+  })
+
+  it('la entrega de ayer sin asset está vencida', () => {
+    expect(estadoDeEntrega({ dueDate: '2026-09-13', assetUrl: null }, HOY)).toBe('atrasada')
+  })
+
+  it('la entrega de hoy todavía no está vencida, pero se distingue', () => {
+    expect(estadoDeEntrega({ dueDate: HOY, assetUrl: null }, HOY)).toBe('hoy')
+  })
+
+  it('la entrega futura va a tiempo', () => {
+    expect(estadoDeEntrega({ dueDate: '2026-09-20', assetUrl: null }, HOY)).toBe('por-entregar')
+  })
+
+  it('con asset ya está entregada, aunque la fecha se haya pasado', () => {
+    // Regla deliberada: la alarma se apaga cuando el material llega. Un tile
+    // que sigue en rojo con la imagen adentro enseña a ignorar el rojo.
+    expect(estadoDeEntrega({ dueDate: '2026-01-01', assetUrl: '/x/y/z.jpg' }, HOY)).toBe(
+      'entregada',
+    )
+  })
+
+  it('un asset sin fecha de entrega también cuenta como entregada', () => {
+    expect(estadoDeEntrega({ dueDate: null, assetUrl: 'https://canva.test/x' }, HOY)).toBe(
+      'entregada',
+    )
+  })
+
+  it('solo lo vencido y lo de hoy se pinta distinto', () => {
+    expect(entregaEnRiesgo('atrasada')).toBe(true)
+    expect(entregaEnRiesgo('hoy')).toBe(true)
+    expect(entregaEnRiesgo('por-entregar')).toBe(false)
+    expect(entregaEnRiesgo('entregada')).toBe(false)
+    expect(entregaEnRiesgo('sin-entrega')).toBe(false)
+  })
+})
+
+describe('diasDeAtraso', () => {
+  it('cuenta días completos', () => {
+    expect(diasDeAtraso('2026-09-10', '2026-09-14')).toBe(4)
+    expect(diasDeAtraso('2026-09-14', '2026-09-14')).toBe(0)
+  })
+
+  it('cruza el cambio de mes y el de año sin corrimiento', () => {
+    expect(diasDeAtraso('2026-08-31', '2026-09-01')).toBe(1)
+    expect(diasDeAtraso('2025-12-31', '2026-01-01')).toBe(1)
+  })
+
+  it('cruza el cambio de horario de verano sin perder ni ganar un día', () => {
+    // Tijuana adelanta el reloj el 5 de abril de 2026. Con aritmética de fechas
+    // locales esta cuenta daría 6.958… días y redondearía mal en la orilla.
+    expect(diasDeAtraso('2026-04-01', '2026-04-08')).toBe(7)
+  })
+
+  it('una entrega futura da negativo', () => {
+    expect(diasDeAtraso('2026-09-20', '2026-09-14')).toBe(-6)
   })
 })
 

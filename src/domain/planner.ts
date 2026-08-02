@@ -252,6 +252,156 @@ export function agenteDelCampo(
   return pieza.authoredBy[campo] ?? null
 }
 
+/* --- Assets ---------------------------------------------------------------- */
+
+export const BUCKET_PIEZAS = 'piezas'
+
+/** Lo que el bucket acepta. Se repite en el cliente para atajar el error antes. */
+export const TIPOS_DE_IMAGEN = [
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/avif',
+  'image/gif',
+] as const
+
+/** 20 MB, el mismo tope que el bucket. Ver la migración 0011. */
+export const TAMANO_MAXIMO_BYTES = 20 * 1024 * 1024
+
+export type TipoDeImagen = (typeof TIPOS_DE_IMAGEN)[number]
+
+export function esTipoDeImagen(tipo: string): tipo is TipoDeImagen {
+  return (TIPOS_DE_IMAGEN as readonly string[]).includes(tipo)
+}
+
+/**
+ * `pieces.asset_url` guarda la ruta del bucket con DIAGONAL INICIAL.
+ *
+ * No es capricho: la columna tiene un CHECK `~ '^(https?://|/)'`, así que una
+ * ruta pelona (`{cliente}/{pieza}/foto.jpg`) la rechaza la base. Storage, en
+ * cambio, nombra sus objetos SIN diagonal inicial, y sus políticas leen el
+ * primer segmento con `storage.foldername(name)[1]`. Con la diagonal de más,
+ * ese primer segmento sería la cadena vacía y el permiso no cuadraría con
+ * ningún cliente.
+ *
+ * Por eso hay dos formas del mismo dato y esta función es el único puente.
+ */
+export function rutaDeStorage(assetUrl: string): string {
+  return assetUrl.startsWith('/') ? assetUrl.slice(1) : assetUrl
+}
+
+/** La forma que guarda la columna, a partir de la ruta que conoce Storage. */
+export function assetUrlDeRuta(ruta: string): string {
+  return ruta.startsWith('/') ? ruta : `/${ruta}`
+}
+
+/**
+ * La ruta del bucket para una pieza. `{client_id}/{piece_id}/{archivo}`.
+ *
+ * El primer segmento es lo que las políticas de Storage usan para decidir, así
+ * que la convención no es estética: es el mecanismo. La calcula SIEMPRE el
+ * servidor — si el navegador eligiera la ruta, elegiría su propio permiso.
+ */
+export function rutaDeAsset(clientId: string, pieceId: string, archivo: string): string {
+  return `${clientId}/${pieceId}/${archivo}`
+}
+
+/** ¿La ruta que mandó el navegador cae dentro de la carpeta de ESTA pieza? */
+export function rutaPerteneceA(ruta: string, clientId: string, pieceId: string): boolean {
+  return rutaDeStorage(ruta).startsWith(`${clientId}/${pieceId}/`)
+}
+
+/**
+ * Un nombre de archivo que no puede escaparse de su carpeta.
+ *
+ * El UUID de enfrente hace dos trabajos: evita que dos subidas con el mismo
+ * nombre choquen, y hace que reemplazar una imagen sea siempre un objeto nuevo
+ * — así el navegador no sirve la anterior de su caché con la URL vieja.
+ */
+export function nombreDeArchivoSeguro(nombre: string, uuid: string): string {
+  const limpio = nombre
+    .normalize('NFKD')
+    // Todo lo que no sea ASCII simple se va, incluidos `/`, `\` y `..`.
+    .replace(/[^a-zA-Z0-9.\-_]+/g, '-')
+    .replace(/^[-.]+/, '')
+    .slice(0, 80)
+  return `${uuid}-${limpio || 'imagen'}`
+}
+
+/** Un enlace externo válido: http o https, nada de `javascript:` ni `data:`. */
+export function esEnlaceHttp(valor: string): boolean {
+  try {
+    const url = new URL(valor)
+    return url.protocol === 'http:' || url.protocol === 'https:'
+  } catch {
+    return false
+  }
+}
+
+/* --- Entrega --------------------------------------------------------------- */
+
+/**
+ * La fecha de ENTREGA no es la de publicación, y por eso vive aparte.
+ *
+ * Publicar es el resultado; entregar es el compromiso que se puede incumplir.
+ * Una pieza que se publica el 20 se entrega el 17, y el atraso que se persigue
+ * todos los lunes es el de la entrega, no el de la publicación.
+ *
+ * `entregada` gana sobre `atrasada` a propósito: en cuanto hay imagen el
+ * compromiso está cumplido, aunque haya llegado tarde. Un tile que sigue
+ * gritando "vencida" con el material ya adentro enseña a ignorar la alarma.
+ */
+export type EstadoEntrega = 'sin-entrega' | 'entregada' | 'por-entregar' | 'hoy' | 'atrasada'
+
+export interface EntregaPieza {
+  /** `AAAA-MM-DD` en la zona del estudio, o `null` si nadie la comprometió. */
+  dueDate: string | null
+  /** Ruta o URL del asset. Que exista es la señal de que el material llegó. */
+  assetUrl: string | null
+}
+
+/** `hoy` se inyecta (`AAAA-MM-DD`): esta función no lee el reloj. */
+export function estadoDeEntrega(pieza: EntregaPieza, hoy: string): EstadoEntrega {
+  if (pieza.assetUrl) return 'entregada'
+  if (!pieza.dueDate) return 'sin-entrega'
+  // Comparación de cadenas y no de fechas: `AAAA-MM-DD` ordena igual como texto
+  // que como calendario, y así no hay una zona horaria de por medio que pueda
+  // mover el día.
+  if (pieza.dueDate < hoy) return 'atrasada'
+  if (pieza.dueDate === hoy) return 'hoy'
+  return 'por-entregar'
+}
+
+/** Lo único que se pinta distinto en el grid y en la tabla. */
+export function entregaEnRiesgo(estado: EstadoEntrega): boolean {
+  return estado === 'atrasada' || estado === 'hoy'
+}
+
+export const ENTREGA_LABEL: Record<EstadoEntrega, string> = {
+  'sin-entrega': 'Sin fecha de entrega',
+  entregada: 'Entregada',
+  'por-entregar': 'Por entregar',
+  hoy: 'Se entrega hoy',
+  atrasada: 'Entrega vencida',
+}
+
+/**
+ * Días completos entre dos `AAAA-MM-DD`. Positivo = `dueDate` ya pasó.
+ *
+ * Se arma con `Date.UTC` sobre las partes y no con `new Date('2026-09-17')`
+ * porque esa forma interpreta la cadena en UTC pero la resta contra una fecha
+ * local, y el resultado se corre un día para medio mundo.
+ */
+export function diasDeAtraso(dueDate: string, hoy: string): number {
+  const ms = 86_400_000
+  return Math.round((aUtc(hoy) - aUtc(dueDate)) / ms)
+}
+
+function aUtc(fecha: string): number {
+  const [a, m, d] = fecha.split('-').map(Number)
+  return Date.UTC(a ?? 0, (m ?? 1) - 1, d ?? 1)
+}
+
 /* --- Stories --------------------------------------------------------------- */
 
 export interface ConteoStories {
@@ -268,18 +418,34 @@ export function conteoStories(stories: readonly { kind: StoryKind }[]): ConteoSt
 /* --- Tabla ----------------------------------------------------------------- */
 
 export type ColumnaTabla =
-  'fecha' | 'formato' | 'pilar' | 'hook' | 'estado' | 'plataformas' | 'procedencia' | 'aprobacion'
+  | 'fecha'
+  | 'entrega'
+  | 'formato'
+  | 'pilar'
+  | 'hook'
+  | 'estado'
+  | 'responsable'
+  | 'sprint'
+  | 'plataformas'
+  | 'procedencia'
+  | 'aprobacion'
 
 export type Direccion = 'asc' | 'desc'
 
 export interface FilaTabla {
   id: string
   fecha: string | null
+  /** `AAAA-MM-DD`. Es la fecha de entrega, no la de publicación. */
+  entrega: string | null
+  entregaEstado: EstadoEntrega
   formato: PieceFormat
   pilar: string
   hook: string
   estado: PieceStatus
   ordenEstado: number
+  /** Nombre ya resuelto, o `null` si nadie la trae. */
+  responsable: string | null
+  sprint: string | null
   plataformas: string[]
   procedencia: string
   aprobacion: string
@@ -302,6 +468,14 @@ export function ordenarFilas(
         // Sin fecha se va al final en las dos direcciones: es trabajo pendiente,
         // no una fecha muy vieja ni una muy futura.
         return f.fecha ?? '￿'
+      case 'entrega':
+        return f.entrega ?? '￿'
+      // Misma regla para lo que está sin asignar: al final, no revuelto entre
+      // los nombres. "Nadie" no es un responsable que empiece con N.
+      case 'responsable':
+        return f.responsable ?? '￿'
+      case 'sprint':
+        return f.sprint ?? '￿'
       case 'formato':
         return f.formato
       case 'pilar':

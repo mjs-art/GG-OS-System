@@ -5,14 +5,33 @@ import { toast } from 'sonner'
 import { RejillaMes, type EntradaCalendario } from '@/components/calendario/rejilla-mes'
 import { Display, Mono } from '@/components/ui/primitives'
 import {
+  crearSprint,
   editarPieza,
+  guardarAssetEnlace,
+  guardarAssetSubido,
   intercambiarFechas,
+  prepararSubidaDeAsset,
+  quitarAsset,
   reacomodarSlots,
   type ResultadoAccion,
+  type ResultadoAsset,
 } from '@/components/planner/acciones'
 import { SegmentedControl } from '@/components/planner/controles'
-import { DrawerPieza, type CambioDePieza } from '@/components/planner/drawer-pieza'
-import type { AccionDeAgente, Cliente, Pieza, Story, SubVista } from '@/components/planner/tipos'
+import {
+  DrawerPieza,
+  type CambioDePieza,
+  type ContextoDePieza,
+} from '@/components/planner/drawer-pieza'
+import type {
+  AccionDeAgente,
+  Cliente,
+  MiembroDelEstudio,
+  Pieza,
+  SprintPlanner,
+  Story,
+  SubVista,
+  UrlsDeAssets,
+} from '@/components/planner/tipos'
 import { SUB_VISTAS } from '@/components/planner/tipos'
 import { VistaGrid, type ResultadoSoltar } from '@/components/planner/vista-grid'
 import { VistaStories } from '@/components/planner/vista-stories'
@@ -28,10 +47,12 @@ import {
 import {
   aplicarCambios,
   balancePilares,
+  BUCKET_PIEZAS,
   ordenarParaGrid,
   reordenar,
   type ModoArrastre,
 } from '@/domain/planner'
+import { createClient as createSupabaseNavegador } from '@/lib/supabase/browser'
 import { formatDate, formatMonthKey, type MonthKey } from '@/lib/time'
 
 /**
@@ -55,6 +76,9 @@ export function PlannerCliente({
   storiesIniciales,
   reglas,
   fechasClave,
+  equipo,
+  sprintsIniciales,
+  urlsIniciales,
   hoy,
 }: {
   cliente: Cliente
@@ -63,10 +87,18 @@ export function PlannerCliente({
   storiesIniciales: readonly Story[]
   reglas: readonly CodeRule[]
   fechasClave: readonly FechaClavePlanner[]
+  equipo: readonly MiembroDelEstudio[]
+  sprintsIniciales: readonly SprintPlanner[]
+  /** URLs ya firmadas por el servidor, por id de pieza. El bucket es privado. */
+  urlsIniciales: UrlsDeAssets
   /** `2026-09-14` en la zona del estudio. Inyectado: los componentes no crean fechas. */
   hoy: string
 }) {
   const [piezas, setPiezas] = useState<readonly Pieza[]>(piezasIniciales)
+  const [urlsAssets, setUrlsAssets] = useState<UrlsDeAssets>(urlsIniciales)
+  const [sprints, setSprints] = useState<readonly SprintPlanner[]>(sprintsIniciales)
+  const [subiendo, setSubiendo] = useState<ReadonlySet<string>>(new Set())
+  const [creandoSprint, setCreandoSprint] = useState(false)
   const [vista, setVista] = useState<SubVista>('grid')
   const [columnas, setColumnas] = useState(3)
   const [contentMap, setContentMap] = useState(false)
@@ -84,6 +116,10 @@ export function PlannerCliente({
   if (semilla !== piezasIniciales) {
     setSemilla(piezasIniciales)
     setPiezas(piezasIniciales)
+    // Las firmas también se rinden: vienen recién hechas del servidor y las
+    // que había en memoria ya empezaron a caducar.
+    setUrlsAssets(urlsIniciales)
+    setSprints(sprintsIniciales)
   }
 
   const ordenadas = useMemo(() => ordenarParaGrid(piezas), [piezas])
@@ -172,6 +208,232 @@ export function PlannerCliente({
     [piezas, cliente.slug, revertirSiFalla],
   )
 
+  /* --- La imagen de la pieza ----------------------------------------------- */
+
+  /** Marca la pieza como ocupada mientras el archivo viaja. */
+  const marcarSubiendo = useCallback((pieceId: string, activo: boolean) => {
+    setSubiendo((previas) => {
+      const siguiente = new Set(previas)
+      if (activo) siguiente.add(pieceId)
+      else siguiente.delete(pieceId)
+      return siguiente
+    })
+  }, [])
+
+  const aplicarAssetEnMemoria = useCallback(
+    (
+      pieceId: string,
+      assetUrl: string | null,
+      fuente: Pieza['assetSource'],
+      url: string | null,
+    ) => {
+      setPiezas((previas) =>
+        previas.map((p) =>
+          p.id === pieceId
+            ? {
+                ...p,
+                assetUrl,
+                assetSource: fuente,
+                // Lo mismo que hace el Server Action: tener archivo ES tenerlo
+                // recibido, y las dos pantallas tienen que decir lo mismo.
+                assetStatus: assetUrl ? 'recibido' : 'pendiente',
+              }
+            : p,
+        ),
+      )
+      setUrlsAssets((previas) => {
+        const siguiente = { ...previas }
+        if (url) siguiente[pieceId] = url
+        else delete siguiente[pieceId]
+        return siguiente
+      })
+    },
+    [],
+  )
+
+  /**
+   * Subir, enlazar y quitar comparten el mismo esqueleto: se pinta el resultado
+   * antes de tiempo, y si el servidor dice que no, se revierte y se dice por
+   * qué. Igual que el arrastre — con la diferencia de que aquí la interfaz no
+   * puede inventar la URL firmada, así que la espera es visible.
+   */
+  const cambiarAsset = useCallback(
+    (
+      pieceId: string,
+      trabajo: () => Promise<ResultadoAsset | ResultadoAccion>,
+      queFallo: string,
+    ) => {
+      const previas = piezas
+      const urlesPrevias = urlsAssets
+
+      marcarSubiendo(pieceId, true)
+      empezarTransicion(async () => {
+        try {
+          const r = await trabajo()
+          if (!r.ok) {
+            setPiezas(previas)
+            setUrlsAssets(urlesPrevias)
+            toast.error(queFallo, { description: r.mensaje })
+          }
+        } catch (error) {
+          /*
+           * A diferencia del resto de las mutaciones, esta pasa por la red DOS
+           * veces y una de ellas no es un Server Action: el PUT del archivo al
+           * bucket lo hace el navegador. Un fallo ahí LANZA en vez de devolver
+           * `{ ok: false }`, y sin este catch la vista previa local se quedaba
+           * puesta para siempre — la imagen se veía subida y no existía. Ese es
+           * exactamente el estado que esta app no se puede permitir.
+           */
+          setPiezas(previas)
+          setUrlsAssets(urlesPrevias)
+          toast.error(queFallo, {
+            description:
+              error instanceof Error
+                ? error.message
+                : 'Se cortó la conexión con el almacenamiento. Vuelve a intentarlo.',
+          })
+        } finally {
+          marcarSubiendo(pieceId, false)
+        }
+      })
+    },
+    [piezas, urlsAssets, marcarSubiendo],
+  )
+
+  const alSubirAsset = useCallback(
+    (pieceId: string, archivo: File) => {
+      // Vista previa local mientras el archivo viaja. `blob:` está permitido en
+      // el CSP y evita que el tile se quede en la placa del pilar veinte
+      // segundos con una imagen que ya se eligió.
+      const previa = URL.createObjectURL(archivo)
+      aplicarAssetEnMemoria(pieceId, previa, 'subido', previa)
+
+      cambiarAsset(
+        pieceId,
+        async () => {
+          const preparado = await prepararSubidaDeAsset({
+            slug: cliente.slug,
+            pieceId,
+            nombre: archivo.name,
+            tipo: archivo.type,
+            tamano: archivo.size,
+          })
+          if (!preparado.ok) return preparado
+
+          // La subida SÍ va desde el navegador —es un archivo— pero contra una
+          // ruta que ya venía firmada por el servidor. El navegador no elige
+          // dónde escribe: en este bucket la ruta es el permiso.
+          const supabase = createSupabaseNavegador()
+          const { error } = await supabase.storage
+            .from(BUCKET_PIEZAS)
+            .uploadToSignedUrl(preparado.ruta, preparado.token, archivo, {
+              contentType: archivo.type,
+            })
+
+          if (error) {
+            return { ok: false as const, mensaje: error.message }
+          }
+
+          const guardado = await guardarAssetSubido({
+            slug: cliente.slug,
+            pieceId,
+            ruta: preparado.ruta,
+          })
+          if (guardado.ok) {
+            aplicarAssetEnMemoria(pieceId, guardado.assetUrl, 'subido', guardado.url)
+          }
+          return guardado
+        },
+        'No se subió la imagen. La pieza quedó como estaba.',
+      )
+
+      // Revocar en cuanto la transición termine no es posible desde aquí sin
+      // encadenar promesas; el objeto se libera solo al salir de la página y
+      // pesa lo que pesa una referencia, no la imagen.
+    },
+    [cliente.slug, aplicarAssetEnMemoria, cambiarAsset],
+  )
+
+  const alEnlazarAsset = useCallback(
+    (pieceId: string, url: string) => {
+      aplicarAssetEnMemoria(pieceId, url, 'enlace', url)
+      cambiarAsset(
+        pieceId,
+        () => guardarAssetEnlace({ slug: cliente.slug, pieceId, url }),
+        'No se guardó el enlace. La pieza quedó como estaba.',
+      )
+    },
+    [cliente.slug, aplicarAssetEnMemoria, cambiarAsset],
+  )
+
+  const alQuitarAsset = useCallback(
+    (pieceId: string) => {
+      aplicarAssetEnMemoria(pieceId, null, null, null)
+      cambiarAsset(
+        pieceId,
+        () => quitarAsset({ slug: cliente.slug, pieceId }),
+        'No se quitó la imagen. La pieza quedó como estaba.',
+      )
+    },
+    [cliente.slug, aplicarAssetEnMemoria, cambiarAsset],
+  )
+
+  /* --- Sprints -------------------------------------------------------------- */
+
+  /**
+   * Crear un sprint son DOS escrituras seguidas: el sprint y la pieza que lo
+   * estrena. Crear uno y dejarlo sin asignar es hacer la mitad del gesto.
+   *
+   * Las dos van en la MISMA transición, una tras otra, y no delegando la
+   * segunda en `alGuardar`. Ese era el primer intento y falla de forma
+   * intermitente: `alGuardar` abre su propia transición, y abrir una transición
+   * dentro de la continuación asíncrona de otra deja el segundo Server Action a
+   * merced de cómo el motor programe las microtareas. En WebKit se perdía —
+   * el sprint quedaba creado, la interfaz lo mostraba puesto, y al recargar la
+   * pieza aparecía sin sprint. Optimista y mentirosa, que es el peor resultado.
+   */
+  const alCrearSprint = useCallback(
+    (pieceId: string, datos: { name: string; startsOn: string; endsOn: string }) => {
+      const sprintPrevio = piezas.find((p) => p.id === pieceId)?.sprintId ?? null
+
+      setCreandoSprint(true)
+      empezarTransicion(async () => {
+        try {
+          const creado = await crearSprint({ slug: cliente.slug, orgId: cliente.orgId, ...datos })
+          if (!creado.ok) {
+            toast.error('No se creó el sprint.', { description: creado.mensaje })
+            return
+          }
+
+          setSprints((previos) => [creado.sprint, ...previos])
+          setPiezas((previas) =>
+            previas.map((p) => (p.id === pieceId ? { ...p, sprintId: creado.sprint.id } : p)),
+          )
+
+          const asignado = await editarPieza({
+            slug: cliente.slug,
+            pieceId,
+            cambio: { campo: 'sprint_id', valor: creado.sprint.id },
+          })
+
+          if (!asignado.ok) {
+            // El sprint SÍ quedó — no se deshace, sirve igual. Lo que se
+            // revierte es la pieza, que es lo que no se guardó.
+            setPiezas((previas) =>
+              previas.map((p) => (p.id === pieceId ? { ...p, sprintId: sprintPrevio } : p)),
+            )
+            toast.error('El sprint se creó, pero no se le pudo poner a esta pieza.', {
+              description: asignado.mensaje,
+            })
+          }
+        } finally {
+          setCreandoSprint(false)
+        }
+      })
+    },
+    [cliente.slug, cliente.orgId, piezas],
+  )
+
   /* --- Calendario ---------------------------------------------------------- */
 
   const entradas = useMemo<EntradaCalendario[]>(() => {
@@ -211,6 +473,19 @@ export function PlannerCliente({
     return lista
   }, [piezas, storiesIniciales, fechasClave, cliente.pilares])
 
+  const contexto: ContextoDePieza = {
+    equipo,
+    sprints,
+    hoy,
+    urlAsset: abierta ? (urlsAssets[abierta] ?? null) : null,
+    subiendoAsset: abierta ? subiendo.has(abierta) : false,
+    creandoSprint,
+    onSubirAsset: alSubirAsset,
+    onEnlazarAsset: alEnlazarAsset,
+    onQuitarAsset: alQuitarAsset,
+    onCrearSprint: alCrearSprint,
+  }
+
   return (
     <>
       <header className="border-line mb-6 flex flex-wrap items-end justify-between gap-4 border-b pb-3">
@@ -239,6 +514,8 @@ export function PlannerCliente({
       {vista === 'grid' && (
         <VistaGrid
           piezas={ordenadas}
+          urlsAssets={urlsAssets}
+          hoy={hoy}
           pilares={cliente.pilares}
           segmentos={segmentos}
           columnas={columnas}
@@ -265,6 +542,9 @@ export function PlannerCliente({
         <VistaTabla
           piezas={ordenadas}
           pilares={cliente.pilares}
+          equipo={equipo}
+          sprints={sprints}
+          hoy={hoy}
           nombreArchivo={`${cliente.slug}-${mes}-planner`}
           onEditarHook={(id, hook) => alGuardar(id, { campo: 'hook', valor: hook || null })}
           onEditarEstado={(id, estado: PieceStatus) =>
@@ -280,6 +560,7 @@ export function PlannerCliente({
         pieza={abierta ? piezas.find((p) => p.id === abierta) : undefined}
         pilares={cliente.pilares}
         reglas={reglas}
+        contexto={contexto}
         onCerrar={() => setAbierta(null)}
         onGuardar={alGuardar}
         onAccionDeAgente={anunciarAgente}
@@ -326,6 +607,12 @@ function aplicarEdicion(pieza: Pieza, cambio: CambioDePieza): Pieza {
       }
     case 'asset_status':
       return { ...pieza, assetStatus: cambio.valor as Pieza['assetStatus'] }
+    case 'due_date':
+      return { ...pieza, dueDate: cambio.valor as string | null }
+    case 'assignee_id':
+      return { ...pieza, assigneeId: cambio.valor as string | null }
+    case 'sprint_id':
+      return { ...pieza, sprintId: cambio.valor as string | null }
     case 'boosted':
       return { ...pieza, boosted: cambio.valor as boolean }
     case 'hashtags':

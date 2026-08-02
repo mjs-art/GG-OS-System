@@ -3,6 +3,8 @@
 import { Lock, LockOpen } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
 import { Button, Chip, Mono } from '@/components/ui/primitives'
+import { CampoAsset } from '@/components/planner/campo-asset'
+import { CampoSprint } from '@/components/planner/campo-sprint'
 import { Interruptor, LabelCampo, SegmentedControl } from '@/components/planner/controles'
 import { Drawer } from '@/components/planner/drawer'
 import {
@@ -11,10 +13,13 @@ import {
   FORMATOS,
   PLATAFORMAS,
   type CampoConProcedencia,
+  type MiembroDelEstudio,
   type Pieza,
   type Pilar,
+  type SprintPlanner,
 } from '@/components/planner/tipos'
 import { checkCodeRules, type CodeRule } from '@/domain/brand-rules'
+import { diasDeAtraso, ENTREGA_LABEL, estadoDeEntrega } from '@/domain/planner'
 import {
   AGENT_LABEL,
   PIECE_FORMAT_LABEL,
@@ -46,10 +51,30 @@ export interface CambioDePieza {
   dateLocked?: boolean
 }
 
+/** Todo lo que el drawer necesita para la imagen, el sprint y el responsable. */
+export interface ContextoDePieza {
+  equipo: readonly MiembroDelEstudio[]
+  sprints: readonly SprintPlanner[]
+  /** `2026-09-14` en la zona del estudio. Aquí no se lee el reloj. */
+  hoy: string
+  /** URL firmada de la imagen de la pieza abierta, si tiene. */
+  urlAsset: string | null
+  subiendoAsset: boolean
+  creandoSprint: boolean
+  onSubirAsset: (pieceId: string, archivo: File) => void
+  onEnlazarAsset: (pieceId: string, url: string) => void
+  onQuitarAsset: (pieceId: string) => void
+  onCrearSprint: (
+    pieceId: string,
+    sprint: { name: string; startsOn: string; endsOn: string },
+  ) => void
+}
+
 export function DrawerPieza({
   pieza,
   pilares,
   reglas,
+  contexto,
   onCerrar,
   onGuardar,
   onAccionDeAgente,
@@ -57,6 +82,7 @@ export function DrawerPieza({
   pieza: Pieza | undefined
   pilares: readonly Pilar[]
   reglas: readonly CodeRule[]
+  contexto: ContextoDePieza
   onCerrar: () => void
   onGuardar: (pieceId: string, cambio: CambioDePieza) => void
   onAccionDeAgente: (accion: (typeof ACCIONES_DE_AGENTE)[number]) => void
@@ -95,6 +121,7 @@ export function DrawerPieza({
           pieza={pieza}
           pilares={pilares}
           reglas={reglas}
+          contexto={contexto}
           onGuardar={onGuardar}
         />
       )}
@@ -106,15 +133,19 @@ function CuerpoDrawer({
   pieza,
   pilares,
   reglas,
+  contexto,
   onGuardar,
 }: {
   pieza: Pieza
   pilares: readonly Pilar[]
   reglas: readonly CodeRule[]
+  contexto: ContextoDePieza
   onGuardar: (pieceId: string, cambio: CambioDePieza) => void
 }) {
   const [editados, setEditados] = useState<ReadonlySet<string>>(new Set())
   const [hashtags, setHashtags] = useState(pieza.hashtags.join(' '))
+
+  const entrega = estadoDeEntrega(pieza, contexto.hoy)
 
   const guardar = (cambio: CambioDePieza) => {
     setEditados((previos) => new Set(previos).add(cambio.campo))
@@ -278,6 +309,72 @@ function CuerpoDrawer({
         </p>
       </section>
 
+      {/*
+        La entrega va JUNTO a la publicación y no en la logística de hasta
+        abajo: son dos fechas del mismo compromiso y separarlas es lo que hace
+        que alguien mueva una y se olvide de la otra.
+      */}
+      <section>
+        <LabelCampo
+          htmlFor={`entrega-${pieza.id}`}
+          extra={
+            entrega === 'atrasada' || entrega === 'hoy' ? (
+              <Chip tone="accent">
+                {entrega === 'hoy'
+                  ? ENTREGA_LABEL.hoy
+                  : `Vencida hace ${diasDeAtraso(pieza.dueDate ?? contexto.hoy, contexto.hoy)} d`}
+              </Chip>
+            ) : null
+          }
+        >
+          Fecha de entrega
+        </LabelCampo>
+        <input
+          id={`entrega-${pieza.id}`}
+          type="date"
+          defaultValue={pieza.dueDate ?? ''}
+          onBlur={(e) => {
+            const nuevo = e.target.value || null
+            if (nuevo !== pieza.dueDate) guardar({ campo: 'due_date', valor: nuevo })
+          }}
+          className="border-line bg-bg text-fg w-full rounded-xs border px-3 py-2 text-[13px]"
+        />
+        <p className="text-fg-muted mt-1.5 text-[12px]">
+          Cuándo tiene que estar el material listo. No es la fecha de publicación: publicar es el
+          resultado, entregar es el compromiso.
+        </p>
+      </section>
+
+      <section>
+        <LabelCampo htmlFor={`responsable-${pieza.id}`}>Responsable</LabelCampo>
+        <select
+          id={`responsable-${pieza.id}`}
+          value={pieza.assigneeId ?? ''}
+          onChange={(e) => guardar({ campo: 'assignee_id', valor: e.target.value || null })}
+          className="border-line bg-bg text-fg w-full rounded-xs border px-3 py-2 text-[13px]"
+        >
+          <option value="">Sin responsable</option>
+          {contexto.equipo.map((m) => (
+            <option key={m.userId} value={m.userId}>
+              {m.esTu ? `${m.nombre} (tú)` : m.nombre}
+            </option>
+          ))}
+        </select>
+        <p className="text-fg-muted mt-1.5 text-[12px]">
+          Solo gente del estudio. La base lo verifica: asignarle una pieza a alguien de fuera es
+          imposible, no nada más está mal visto.
+        </p>
+      </section>
+
+      <CampoSprint
+        pieceId={pieza.id}
+        sprintId={pieza.sprintId}
+        sprints={contexto.sprints}
+        creando={contexto.creandoSprint}
+        onElegir={(sprintId) => guardar({ campo: 'sprint_id', valor: sprintId })}
+        onCrear={(sprint) => contexto.onCrearSprint(pieza.id, sprint)}
+      />
+
       <section>
         <LabelCampo htmlFor={`estado-${pieza.id}`}>Estado</LabelCampo>
         <select
@@ -336,8 +433,23 @@ function CuerpoDrawer({
       </section>
 
       {/* --- Logística ----------------------------------------------------- */}
+      <CampoAsset
+        pieza={pieza}
+        url={contexto.urlAsset}
+        subiendo={contexto.subiendoAsset}
+        onSubir={(archivo) => contexto.onSubirAsset(pieza.id, archivo)}
+        onEnlazar={(url) => contexto.onEnlazarAsset(pieza.id, url)}
+        onQuitar={() => contexto.onQuitarAsset(pieza.id)}
+      />
+
+      {/*
+        El estado del asset se sigue pudiendo mover a mano, pero ya no es la
+        única verdad: en cuanto hay imagen, guardarla lo pone en `recibido`. Se
+        deja el control porque "recibido" también cubre el material que llegó
+        por WhatsApp y todavía no se sube.
+      */}
       <section>
-        <LabelCampo>Asset</LabelCampo>
+        <LabelCampo>Estado del material</LabelCampo>
         <SegmentedControl
           etiqueta="Estado del asset"
           valor={pieza.assetStatus}
@@ -347,9 +459,6 @@ function CuerpoDrawer({
             { id: 'recibido', label: 'Recibido' },
           ]}
         />
-        <p className="text-fg-muted mt-1.5 text-[12px]">
-          Solo el estado. Los archivos viven en la carpeta del cliente, no aquí.
-        </p>
       </section>
 
       <section>
