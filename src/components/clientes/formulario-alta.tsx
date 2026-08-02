@@ -1,14 +1,16 @@
 'use client'
 
-import { useActionState, useState } from 'react'
+import { Upload } from 'lucide-react'
+import { useActionState, useCallback, useRef, useState } from 'react'
 import { slugify } from '@/domain/slug'
 import { Button, Display, Mono } from '@/components/ui/primitives'
 import { crearClienteAccion, type EstadoAlta } from './acciones'
 import type { OrgDelUsuario } from '@/lib/datos/orgs'
+import { cn } from '@/lib/cn'
+import { procesarNotionMd, type ResultadoParseoMd } from './procesar-md'
 
 const INICIAL: EstadoAlta = { status: 'inicial' }
 
-/** Clases del design system, calcadas del importador. No hay primitiva de input. */
 const CAMPO = 'border-line bg-bg text-fg type-mono w-full rounded-xs border p-2'
 
 interface PilarBorrador {
@@ -17,15 +19,6 @@ interface PilarBorrador {
   targetPct: number
 }
 
-/**
- * Un color de arranque distinto por pilar, para que el grid no nazca en negro.
- *
- * Se genera en runtime (HSL→hex) a propósito: los hex literales en el fuente
- * los prohíbe el guardián del design system (`tokens.test.ts`). El color de un
- * pilar es un dato del cliente, no de la marca del estudio — el usuario lo
- * ajusta, y se guarda como dato. Rota el matiz y mantiene saturación y luz
- * apagadas para que combine con la paleta editorial.
- */
 function colorDePilar(indice: number): string {
   const h = (indice * 53) % 360
   return hslAHex(h, 38, 42)
@@ -48,13 +41,20 @@ export function FormularioAlta({ orgs }: { orgs: OrgDelUsuario[] }) {
 
   const [nombre, setNombre] = useState('')
   const [slug, setSlug] = useState('')
+  const [handle, setHandle] = useState('')
+  const [brandColor, setBrandColor] = useState(hslAHex(8, 55, 40))
   const [pilares, setPilares] = useState<PilarBorrador[]>([])
 
-  // Lo que verá la URL: el slug escrito a mano gana; si no, se deriva del nombre.
   const slugFinal = slug.trim() !== '' ? slugify(slug) : slugify(nombre)
 
-  function agregarPilar() {
-    setPilares((prev) => [...prev, { name: '', color: colorDePilar(prev.length), targetPct: 0 }])
+  // Datos de marca extraídos del .md de Notion. Se mandan como hidden.
+  const [datosDeMarca, setDatosDeMarca] = useState<ResultadoParseoMd['datos'] | null>(null)
+
+  function agregarPilar(name = '', color?: string) {
+    setPilares((prev) => [
+      ...prev,
+      { name, color: color ?? colorDePilar(prev.length), targetPct: 0 },
+    ])
   }
 
   function actualizarPilar(i: number, cambios: Partial<PilarBorrador>) {
@@ -65,14 +65,157 @@ export function FormularioAlta({ orgs }: { orgs: OrgDelUsuario[] }) {
     setPilares((prev) => prev.filter((_, j) => j !== i))
   }
 
-  // Solo viajan los pilares con nombre: una fila en blanco no es un pilar.
   const pilaresLlenos = pilares.filter((p) => p.name.trim() !== '')
+
+  // Drag & drop del .md de Notion
+  const [arrastrando, setArrastrando] = useState(false)
+  const [parseando, setParseando] = useState(false)
+  const [errorParseo, setErrorParseo] = useState<string | null>(null)
+  const archivoRef = useRef<HTMLInputElement>(null)
+
+  const procesarArchivo = useCallback(async (archivo: File) => {
+    if (!archivo.name.endsWith('.md') && !archivo.name.endsWith('.txt')) {
+      setErrorParseo('Solo se aceptan archivos .md exportados de Notion.')
+      return
+    }
+
+    setParseando(true)
+    setErrorParseo(null)
+
+    try {
+      const texto = await archivo.text()
+      const formData = new FormData()
+      formData.set('content', texto)
+
+      const resultado = await procesarNotionMd({ status: 'error', message: '' }, formData)
+
+      if (resultado.status === 'ok' && resultado.datos) {
+        const d = resultado.datos
+        if (d.nombre) {
+          setNombre(d.nombre)
+          setSlug('')
+        }
+        if (d.colorDeMarca) setBrandColor(d.colorDeMarca)
+
+        // Pilares del MD: se agregan al final, con colores auto-generados
+        if (d.pilares.length > 0) {
+          setPilares((prev) => {
+            const inicio = prev.filter((p) => p.name.trim() !== '').length
+            return [
+              ...prev,
+              ...d.pilares.map((p, i) => ({
+                name: p.nombre,
+                color: colorDePilar(inicio + i),
+                targetPct: 0,
+              })),
+            ]
+          })
+        }
+
+        setDatosDeMarca(d)
+        setErrorParseo(null)
+      } else {
+        setErrorParseo(resultado.message ?? 'No se pudo leer el archivo.')
+      }
+    } catch {
+      setErrorParseo('No se pudo leer el archivo. ¿Está en formato .md?')
+    } finally {
+      setParseando(false)
+    }
+  }, [])
+
+  const onDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    setArrastrando(false)
+    const archivo = e.dataTransfer.files[0]
+    if (archivo) procesarArchivo(archivo)
+  }
+
+  const datosMarcaJson = datosDeMarca
+    ? JSON.stringify({
+        queEs: datosDeMarca.queEs ?? null,
+        posicionamiento: null,
+        diferenciadores: datosDeMarca.diferenciadores,
+        audiencia: datosDeMarca.audiencia.join(', '),
+        tono: datosDeMarca.tono,
+        palabrasProhibidas: datosDeMarca.palabrasProhibidas,
+        cadencia: null,
+      })
+    : ''
 
   return (
     <form action={action} className="flex max-w-2xl flex-col gap-8">
       <input type="hidden" name="pilares" value={JSON.stringify(pilaresLlenos)} />
+      <input type="hidden" name="datosDeMarca" value={datosMarcaJson} />
 
-      {/* --- Datos del cliente ---------------------------------------------- */}
+      {/* Drag & drop del .md de Notion */}
+      <div
+        className={cn(
+          'border-line flex flex-col items-center gap-3 rounded-xs border border-dashed px-6 py-5 transition-colors',
+          arrastrando && 'border-accent-hot bg-surface',
+          parseando && 'opacity-60',
+        )}
+        onDragOver={(e) => {
+          e.preventDefault()
+          setArrastrando(true)
+        }}
+        onDragLeave={() => setArrastrando(false)}
+        onDrop={onDrop}
+        onClick={() => archivoRef.current?.click()}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') archivoRef.current?.click()
+        }}
+      >
+        <Upload aria-hidden className="text-fg-muted size-5" />
+        <div className="text-center">
+          <p className="text-fg-muted text-[13px]">
+            {parseando
+              ? 'Leyendo el archivo…'
+              : 'Arrastra el .md de Notion para llenar todo de un jalón'}
+          </p>
+          <p className="text-fg-muted mt-1 text-[12px] opacity-70">
+            Nombre, color de marca, pilares, audiencia, tono y diferenciadores se llenan solos.
+          </p>
+        </div>
+        <input
+          ref={archivoRef}
+          type="file"
+          accept=".md,.txt"
+          className="hidden"
+          onChange={(e) => {
+            const archivo = e.target.files?.[0]
+            if (archivo) procesarArchivo(archivo)
+            if (archivoRef.current) archivoRef.current.value = ''
+          }}
+        />
+      </div>
+
+      {errorParseo && (
+        <div
+          className="bg-surface-2 border-l-[3px] px-4 py-3"
+          style={{ borderLeftColor: 'var(--color-accent-hot)' }}
+          role="status"
+        >
+          <p className="text-[13px]">{errorParseo}</p>
+        </div>
+      )}
+
+      {datosDeMarca && !errorParseo && (
+        <div
+          className="bg-surface-2 border-l-[3px] px-4 py-3"
+          style={{ borderLeftColor: 'var(--color-ok)' }}
+        >
+          <p className="text-[13px]">
+            Leídos {datosDeMarca.pilares.length} pilares, {datosDeMarca.audiencia.length} públicos,
+            color {datosDeMarca.colorDeMarca ?? 'sin color'}. Al dar de alta se crea también el
+            Context Card.
+          </p>
+        </div>
+      )}
+
+      {/* Datos del cliente */}
       <div className="flex flex-col gap-4">
         <label className="flex flex-col gap-1.5">
           <Mono className="text-fg-muted">Nombre</Mono>
@@ -107,6 +250,8 @@ export function FormularioAlta({ orgs }: { orgs: OrgDelUsuario[] }) {
             <Mono className="text-fg-muted">Redes (handle)</Mono>
             <input
               name="handle"
+              value={handle}
+              onChange={(e) => setHandle(e.target.value)}
               maxLength={120}
               autoComplete="off"
               className={CAMPO}
@@ -130,7 +275,8 @@ export function FormularioAlta({ orgs }: { orgs: OrgDelUsuario[] }) {
             <input
               type="color"
               name="brandColor"
-              defaultValue={hslAHex(8, 55, 40)}
+              value={brandColor}
+              onChange={(e) => setBrandColor(e.target.value)}
               className="border-line h-10 w-20 cursor-pointer rounded-xs border bg-transparent p-1"
               aria-label="Color de marca del cliente"
             />
@@ -162,7 +308,7 @@ export function FormularioAlta({ orgs }: { orgs: OrgDelUsuario[] }) {
         )}
       </div>
 
-      {/* --- Pilares -------------------------------------------------------- */}
+      {/* Pilares */}
       <div className="border-line flex flex-col gap-4 border-t pt-8">
         <div className="flex items-end justify-between gap-4">
           <div>
@@ -170,10 +316,12 @@ export function FormularioAlta({ orgs }: { orgs: OrgDelUsuario[] }) {
               Pilares
             </Display>
             <Mono className="text-fg-muted mt-1 block">
-              Opcional. Los puedes agregar después desde la ficha del cliente.
+              {pilares.length > 0
+                ? `${pilaresLlenos.length} ${pilaresLlenos.length === 1 ? 'pilar' : 'pilares'}`
+                : 'Opcional. Los puedes agregar después desde la ficha del cliente.'}
             </Mono>
           </div>
-          <Button type="button" variant="secondary" onClick={agregarPilar}>
+          <Button type="button" variant="secondary" onClick={() => agregarPilar()}>
             Agregar pilar
           </Button>
         </div>
@@ -228,7 +376,6 @@ export function FormularioAlta({ orgs }: { orgs: OrgDelUsuario[] }) {
         )}
       </div>
 
-      {/* --- Error y envío -------------------------------------------------- */}
       {estado.status === 'error' && (
         <div
           className="bg-surface-2 border-l-[3px] px-4 py-3"

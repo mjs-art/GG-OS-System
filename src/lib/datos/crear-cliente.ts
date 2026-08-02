@@ -2,11 +2,20 @@ import 'server-only'
 
 import { createClient } from '@/lib/supabase/server'
 
-/** Un pilar tal como llega del formulario, sin id ni posición todavía. */
 export interface PilarNuevo {
   name: string
   color: string
   targetPct: number
+}
+
+export interface DatosDeMarcaAlCrear {
+  queEs: string | null
+  posicionamiento: string | null
+  diferenciadores: string[]
+  audiencia: string | null
+  tono: string[]
+  palabrasProhibidas: string[]
+  cadencia: string | null
 }
 
 export interface NuevoCliente {
@@ -18,6 +27,7 @@ export interface NuevoCliente {
   brandColor: string | null
   timezone: string
   pilares: PilarNuevo[]
+  datosDeMarca?: DatosDeMarcaAlCrear | null
 }
 
 export type ResultadoAlta =
@@ -85,12 +95,6 @@ export async function crearCliente(entrada: NuevoCliente): Promise<ResultadoAlta
     )
 
     if (errorPilares) {
-      // No se deshace el cliente: los pilares son opcionales, así que un cliente
-      // sin ellos es un estado válido, no un alta corrupta. Y borrarlo aquí ni
-      // siquiera funcionaría para un staff —el DELETE de clients es solo-owner
-      // por RLS y afectaría cero renglones—, así que en vez de fingir un
-      // rollback que no ocurre, el cliente queda creado y se dice la verdad: se
-      // abre desde la lista para agregar los pilares a mano.
       const duplicado = errorPilares.code === UNIQUE_VIOLATION
       return {
         ok: false,
@@ -101,6 +105,24 @@ export async function crearCliente(entrada: NuevoCliente): Promise<ResultadoAlta
           : `Se creó "${entrada.name}", pero sus pilares no se guardaron (${errorPilares.message}). Ábrelo desde la lista y agrégalos.`,
       }
     }
+  }
+
+  if (entrada.datosDeMarca) {
+    const d = entrada.datosDeMarca
+    await supabase.from('context_card_versions').insert({
+      org_id: entrada.orgId,
+      client_id: cliente.id,
+      version: 1,
+      what_it_is: d.queEs,
+      positioning: d.posicionamiento,
+      differentiators: d.diferenciadores,
+      audience: d.audiencia,
+      tone: d.tono,
+      banned_words: d.palabrasProhibidas,
+      cadence: d.cadencia,
+    })
+    // Si falla, el Context Card queda sin crear. No es crítico: se puede
+    // llenar a mano en § Marca. Pero no bloqueamos el alta del cliente.
   }
 
   return { ok: true, slug: cliente.slug }

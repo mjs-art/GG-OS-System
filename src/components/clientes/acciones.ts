@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { z } from 'zod'
 import { slugify } from '@/domain/slug'
-import { crearCliente, type PilarNuevo } from '@/lib/datos/crear-cliente'
+import { crearCliente, type DatosDeMarcaAlCrear, type PilarNuevo } from '@/lib/datos/crear-cliente'
 import { orgsDelUsuario } from '@/lib/datos/orgs'
 
 /**
@@ -88,6 +88,28 @@ const entrada = z.object({
         return z.NEVER
       }
     }),
+  datosDeMarca: z
+    .string()
+    .nullish()
+    .transform((v): DatosDeMarcaAlCrear | null => {
+      if (!v || v.trim() === '') return null
+      try {
+        const crudo = JSON.parse(v) as unknown
+        return z
+          .object({
+            queEs: z.string().nullable(),
+            posicionamiento: z.string().nullable(),
+            diferenciadores: z.array(z.string()),
+            audiencia: z.string().nullable(),
+            tono: z.array(z.string()),
+            palabrasProhibidas: z.array(z.string()),
+            cadencia: z.string().nullable(),
+          })
+          .parse(crudo)
+      } catch {
+        return null
+      }
+    }),
 })
 
 export async function crearClienteAccion(
@@ -103,6 +125,7 @@ export async function crearClienteAccion(
     timezone: formData.get('timezone'),
     orgId: formData.get('orgId'),
     pilares: formData.get('pilares'),
+    datosDeMarca: formData.get('datosDeMarca'),
   })
 
   if (!parsed.success) {
@@ -149,6 +172,7 @@ export async function crearClienteAccion(
     brandColor: datos.brandColor,
     timezone: datos.timezone,
     pilares: datos.pilares,
+    datosDeMarca: datos.datosDeMarca,
   })
 
   if (!resultado.ok) {
