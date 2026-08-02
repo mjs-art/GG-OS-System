@@ -23,6 +23,32 @@ import type { AgentProvider, ProviderRequest, ProviderResult } from '@/agents/ru
 
 const MODELO_DEFAULT = 'claude-opus-4-8'
 
+type Effort = 'low' | 'medium' | 'high'
+
+/**
+ * Ruteo por agente: con qué modelo y cuánto esfuerzo corre cada uno.
+ *
+ * El MODELO se queda en Opus 4.8 para todos. Bajar de modelo es una decisión
+ * consciente por cliente y para eso está `agent_policies.model`, que gana sobre
+ * este default (lo lee el runner y llega en `request.model`). El dial de costo
+ * de aquí es el ESFUERZO, que es la palanca de Opus 4.8 sin cambiar de modelo:
+ *
+ *   - bajo   → revisar/clasificar lo que ya existe (Editor de marca)
+ *   - medio  → escribir (Redactor, Guionista, Cuenta)
+ *   - alto   → razonar sobre estrategia o auditar la cuenta (Estratega,
+ *              Analista, Pautero, Auditor)
+ */
+const RUTEO: Record<AgentKey, { model: string; effort: Effort }> = {
+  estratega: { model: MODELO_DEFAULT, effort: 'high' },
+  analista: { model: MODELO_DEFAULT, effort: 'high' },
+  guionista: { model: MODELO_DEFAULT, effort: 'medium' },
+  redactor: { model: MODELO_DEFAULT, effort: 'medium' },
+  editor_marca: { model: MODELO_DEFAULT, effort: 'low' },
+  pautero: { model: MODELO_DEFAULT, effort: 'high' },
+  auditor: { model: MODELO_DEFAULT, effort: 'high' },
+  cuenta: { model: MODELO_DEFAULT, effort: 'medium' },
+}
+
 /** Centavos de USD por millón de tokens. Default = tarifa de Opus 4.8. */
 const TARIFA_OPUS = { entrada: 500, salida: 2500 }
 const PRECIO_POR_MTOK: Record<string, { entrada: number; salida: number }> = {
@@ -98,7 +124,8 @@ export function createAnthropicProvider(apiKey: string): AgentProvider {
   return {
     name: 'anthropic',
     async complete<K extends AgentKey>(request: ProviderRequest<K>): Promise<ProviderResult> {
-      const model = request.model ?? MODELO_DEFAULT
+      const ruta = RUTEO[request.agent]
+      const model = request.model ?? ruta.model
 
       const message = await client.messages.create(
         {
@@ -113,9 +140,10 @@ export function createAnthropicProvider(apiKey: string): AgentProvider {
               cache_control: { type: 'ephemeral' },
             },
           ],
-          // Sin thinking (Opus 4.8 sin el parámetro no razona): el Redactor es
-          // alto volumen y bajo riesgo, y la salida va restringida por el prompt.
-          output_config: { effort: 'medium' },
+          // Sin thinking (Opus 4.8 sin el parámetro no razona): la salida va
+          // restringida por el prompt. El costo se modula con el esfuerzo por
+          // agente (ver RUTEO): revisar es barato, razonar es caro.
+          output_config: { effort: ruta.effort },
           messages: [
             {
               role: 'user',
