@@ -2275,7 +2275,20 @@ export type Database = {
       }
     }
     Functions: {
-      [_ in never]: never
+      edit_piece_field: {
+        Args: {
+          p_field: string
+          p_piece: string
+          p_tags: string[]
+          p_value: string
+        }
+        Returns: undefined
+      }
+      shift_piece_slots: {
+        Args: { moves: Json; target_client: string }
+        Returns: number
+      }
+      swap_piece_slots: { Args: { a: string; b: string }; Returns: undefined }
     }
     Enums: {
       [_ in never]: never

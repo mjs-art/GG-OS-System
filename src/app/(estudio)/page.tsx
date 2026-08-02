@@ -1,28 +1,28 @@
-import { Display, EmptyState, Mono } from '@/components/ui/primitives'
-import { SwitchTema } from '@/components/ui/switch-tema'
+import type { Metadata } from 'next'
+import { Bandeja } from '@/components/bandeja/bandeja'
+import { cargarBandeja } from '@/lib/datos/bandeja'
+import { systemClock } from '@/lib/time'
+
+export const metadata: Metadata = { title: 'Bandeja' }
 
 /**
- * Bandeja — la cola de todo lo que necesita criterio humano, de todos los
- * clientes. Por ahora solo el cascarón; el contenido llega en la etapa 6.
+ * La Bandeja: la cola de todo lo que necesita criterio humano, de todos los
+ * clientes.
+ *
+ * `flex-1 flex-col` no es decorativo: la barra de atajos es sticky al fondo
+ * con `mt-auto`, y sin un contenedor que ocupe el alto disponible se pega al
+ * final del contenido en vez de al de la pantalla.
  */
-export default function BandejaPage() {
-  return (
-    <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-8 px-6 py-16">
-      <header className="flex items-start justify-between gap-4">
-        <div className="flex flex-col gap-2">
-          <Display as="h1" className="text-5xl">
-            Bandeja
-          </Display>
-          <Mono className="text-fg-muted">0 escalamientos · 0 críticos</Mono>
-        </div>
-        {/* Provisional: cuando exista la barra superior de la app, el switch se
-            muda ahí y sale de la página. */}
-        <SwitchTema />
-      </header>
+export default async function BandejaPage() {
+  const ahora = systemClock.now()
+  const { escalamientos, piezasAvanzadasHoy } = await cargarBandeja(ahora)
 
-      <EmptyState
-        title="Bandeja limpia"
-        body="Cuando los agentes necesiten tu criterio, aparecerá aquí. Nada pendiente por ahora."
+  return (
+    <main className="flex flex-1 flex-col">
+      <Bandeja
+        escalamientos={escalamientos}
+        piezasAvanzadasHoy={piezasAvanzadasHoy}
+        ahora={ahora.toISOString()}
       />
     </main>
   )

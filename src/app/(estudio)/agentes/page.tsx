@@ -1,18 +1,25 @@
 import type { Metadata } from 'next'
-import { Display, EmptyState } from '@/components/ui/primitives'
+import { TableroAgentes } from '@/components/agentes/tablero-agentes'
+import { panelAgentes } from '@/lib/datos/agentes'
+import { systemClock } from '@/lib/time'
 
 export const metadata: Metadata = { title: 'Agentes' }
 
-export default function AgentesPage() {
+/**
+ * El cliente se elige por slug en la URL y no por uuid: la liga se comparte y
+ * un uuid no le dice nada a nadie.
+ */
+export default async function AgentesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ cliente?: string }>
+}) {
+  const { cliente } = await searchParams
+  const panel = await panelAgentes(systemClock.now(), cliente)
+
   return (
-    <main className="flex flex-1 flex-col gap-6 px-6 py-8">
-      <Display as="h1" className="text-3xl">
-        Agentes
-      </Display>
-      <EmptyState
-        title="Los ocho agentes corren en modo mock"
-        body="Todavía no hay ni una llamada de red a un modelo. Esta pantalla se construye en la etapa 10 del plan."
-      />
+    <main className="flex flex-1 flex-col px-6 py-8">
+      <TableroAgentes panel={panel} />
     </main>
   )
 }

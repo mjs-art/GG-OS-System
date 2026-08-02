@@ -42,7 +42,12 @@ select
 from (values
   ('11111111-0000-4000-8000-000000000001'::uuid, 'ana@ejemplo.test',          'Ana'),
   ('11111111-0000-4000-8000-000000000002'::uuid, 'equipo@ejemplo.test',       'Equipo'),
-  ('11111111-0000-4000-8000-000000000004'::uuid, 'contacto@barficticio.test', 'Contacto')
+  ('11111111-0000-4000-8000-000000000004'::uuid, 'contacto@barficticio.test', 'Contacto'),
+  -- Usuarios dedicados a las pruebas de extremo a extremo. Cada spec necesita
+  -- el suyo: dos que compartan buzón se consumen el magic link entre ellas y
+  -- el síntoma es un otp_expired intermitente que parece bug de la app.
+  ('11111111-0000-4000-8000-000000000005'::uuid, 'e2e-planner@ejemplo.test', 'E2E Planner'),
+  ('11111111-0000-4000-8000-000000000006'::uuid, 'e2e-portal@ejemplo.test',  'E2E Portal')
 ) as u(id, email, name)
 on conflict (id) do nothing;
 
@@ -66,7 +71,8 @@ on conflict (id) do nothing;
 
 insert into public.org_members (org_id, user_id, role) values
   ('aaaaaaaa-0000-4000-8000-000000000001', '11111111-0000-4000-8000-000000000001', 'owner'),
-  ('aaaaaaaa-0000-4000-8000-000000000001', '11111111-0000-4000-8000-000000000002', 'staff')
+  ('aaaaaaaa-0000-4000-8000-000000000001', '11111111-0000-4000-8000-000000000002', 'staff'),
+  ('aaaaaaaa-0000-4000-8000-000000000001', '11111111-0000-4000-8000-000000000005', 'staff')
 on conflict do nothing;
 
 -- --- Clientes ficticios --------------------------------------------------------
