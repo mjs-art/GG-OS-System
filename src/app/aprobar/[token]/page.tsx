@@ -72,7 +72,7 @@ export default async function AprobarPage({ params }: { params: Promise<{ token:
    */
   const { data: cliente } = await supabase
     .from('clients')
-    .select('id, name, brand_color')
+    .select('id, name, handle, brand_color, avatar_url, bio')
     .eq('id', clientId)
     .maybeSingle()
 
@@ -89,7 +89,10 @@ export default async function AprobarPage({ params }: { params: Promise<{ token:
     <VistaPortal
       clientId={cliente.id}
       nombre={cliente.name}
+      handle={cliente.handle}
       brandColor={cliente.brand_color}
+      avatarUrl={cliente.avatar_url}
+      bio={cliente.bio}
       mes={month as MonthKey}
     />
   )

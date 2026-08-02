@@ -533,6 +533,12 @@ export function PlannerCliente({
     sprints,
     hoy,
     urlAsset: abierta ? (urlsAssets[abierta] ?? null) : null,
+    cuenta: {
+      handle: cliente.handle,
+      avatarUrl: cliente.avatarUrl,
+      bio: cliente.bio,
+      brandColor: cliente.brandColor,
+    },
     subiendoAsset: abierta ? subiendo.has(abierta) : false,
     creandoSprint,
     onSubirAsset: alSubirAsset,

@@ -105,6 +105,9 @@ export interface Cliente {
   handle: string | null
   tier: string | null
   brandColor: string | null
+  /** Identidad pública de la cuenta: el header del post de Instagram. */
+  avatarUrl: string | null
+  bio: string | null
   timezone: string
   pilares: Pilar[]
 }
@@ -115,7 +118,7 @@ export async function obtenerCliente(slug: string): Promise<Cliente | null> {
   const { data, error } = await supabase
     .from('clients')
     .select(
-      'id, org_id, slug, name, handle, tier, brand_color, timezone, pillars(id, name, color, target_pct, position)',
+      'id, org_id, slug, name, handle, tier, brand_color, avatar_url, bio, timezone, pillars(id, name, color, target_pct, position)',
     )
     .eq('slug', slug)
     .is('archived_at', null)
@@ -132,6 +135,8 @@ export async function obtenerCliente(slug: string): Promise<Cliente | null> {
     handle: data.handle,
     tier: data.tier,
     brandColor: data.brand_color,
+    avatarUrl: data.avatar_url,
+    bio: data.bio,
     timezone: data.timezone,
     pilares: (data.pillars ?? [])
       .map((p) => ({

@@ -115,11 +115,19 @@ insert into public.org_members (org_id, user_id, role) values
 on conflict do nothing;
 
 -- --- Clientes ficticios --------------------------------------------------------
-insert into public.clients (id, org_id, slug, name, handle, tier, brand_color) values
+-- avatar_url y bio son la identidad PÚBLICA de la cuenta: el header del post de
+-- Instagram en el preview del estudio y en el portal. La avatar es una URL
+-- pública (Unsplash) a propósito — es identidad pública, no un asset privado de
+-- pieza, así que no necesita el bucket firmado.
+insert into public.clients (id, org_id, slug, name, handle, tier, brand_color, avatar_url, bio) values
   ('cccccccc-0000-4000-8000-000000000001', 'aaaaaaaa-0000-4000-8000-000000000001',
-   'bar-ficticio', 'Bar Ficticio', '@barficticio', 'premium', '#C08A3E'),
+   'bar-ficticio', 'Bar Ficticio', '@barficticio', 'premium', '#C08A3E',
+   'https://images.unsplash.com/photo-1470337458703-46ad1756a187?auto=format&fit=crop&w=160&h=160&q=60',
+   'Coctelería de autor · música en vivo · reservas por DM'),
   ('cccccccc-0000-4000-8000-000000000002', 'aaaaaaaa-0000-4000-8000-000000000001',
-   'hotel-ejemplo', 'Hotel Ejemplo', '@hotelejemplo', 'estándar', '#3E6C8A')
+   'hotel-ejemplo', 'Hotel Ejemplo', '@hotelejemplo', 'estándar', '#3E6C8A',
+   'https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=160&h=160&q=60',
+   'Descanso frente al mar · escápate el fin de semana')
 on conflict (id) do nothing;
 
 insert into public.client_users (org_id, client_id, email, name) values

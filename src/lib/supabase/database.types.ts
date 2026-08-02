@@ -891,6 +891,8 @@ export type Database = {
       clients: {
         Row: {
           archived_at: string | null
+          avatar_url: string | null
+          bio: string | null
           brand_color: string | null
           created_at: string
           handle: string | null
@@ -904,6 +906,8 @@ export type Database = {
         }
         Insert: {
           archived_at?: string | null
+          avatar_url?: string | null
+          bio?: string | null
           brand_color?: string | null
           created_at?: string
           handle?: string | null
@@ -917,6 +921,8 @@ export type Database = {
         }
         Update: {
           archived_at?: string | null
+          avatar_url?: string | null
+          bio?: string | null
           brand_color?: string | null
           created_at?: string
           handle?: string | null

@@ -1,4 +1,7 @@
-import { PIECE_FORMAT_LABEL } from '@/domain/labels'
+import { PostInstagram } from '@/components/post/post-instagram'
+import { componerCaption } from '@/domain/post-preview'
+import type { AssetSource } from '@/lib/datos/clientes'
+import { urlsDeAssets } from '@/lib/datos/planner'
 import { createClient } from '@/lib/supabase/server'
 import { formatDate, formatMonthKey, type MonthKey } from '@/lib/time'
 import { AccionesPieza } from './acciones-pieza'
@@ -19,29 +22,45 @@ import { AccionesPieza } from './acciones-pieza'
 export async function VistaPortal({
   clientId,
   nombre,
+  handle,
   brandColor,
+  avatarUrl,
+  bio,
   mes,
 }: {
   clientId: string
   nombre: string
+  handle: string | null
   brandColor: string | null
+  avatarUrl: string | null
+  bio: string | null
   mes: MonthKey
 }) {
   const supabase = await createClient()
 
-  const [{ data: piezas }, { data: pilares }, { data: aprobaciones }] = await Promise.all([
+  const [{ data: piezas }, { data: aprobaciones }] = await Promise.all([
     supabase
       .from('pieces')
-      .select('id, format, pillar_id, publish_at, hook, copy_in, copy_out, cta, hashtags, status')
+      .select(
+        'id, format, publish_at, hook, copy_in, copy_out, cta, hashtags, status, asset_url, asset_source',
+      )
       .eq('client_id', clientId)
       .eq('month', mes)
       .order('publish_at', { nullsFirst: false }),
-    supabase.from('pillars').select('id, name, color').eq('client_id', clientId),
     supabase.from('approvals').select('piece_id, decision').eq('client_id', clientId),
   ])
 
   const lista = piezas ?? []
-  const colorPilar = new Map((pilares ?? []).map((p) => [p.id, p] as const))
+  // Firma en lote las imágenes de las piezas que ya tienen asset (los enlaces
+  // externos pasan tal cual). RLS ya recortó la lista a lo client-visible, así
+  // que aquí no se firma jamás un borrador. Misma función que el planner.
+  const urls = await urlsDeAssets(
+    lista.map((p) => ({
+      id: p.id,
+      assetUrl: p.asset_url,
+      assetSource: p.asset_source as AssetSource | null,
+    })),
+  )
   const decidida = new Set((aprobaciones ?? []).map((a) => a.piece_id))
   const aprobadas = (aprobaciones ?? []).filter((a) => a.decision === 'aprobado').length
 
@@ -71,42 +90,28 @@ export async function VistaPortal({
           </div>
         </div>
       ) : (
-        <div className="mx-auto flex max-w-3xl flex-col gap-10 px-6">
+        <div className="mx-auto flex max-w-sm flex-col gap-12 px-6">
           {lista.map((p) => {
-            const pilar = p.pillar_id ? colorPilar.get(p.pillar_id) : undefined
+            const caption = componerCaption({
+              hook: p.hook,
+              copyIn: p.copy_in,
+              copyOut: p.copy_out,
+              cta: p.cta,
+              hashtags: p.hashtags ?? [],
+            })
             return (
-              <article key={p.id} className="border-line rounded-xs border">
-                <div className="border-line flex flex-wrap items-center gap-3 border-b px-5 py-3">
-                  <span
-                    aria-hidden
-                    className="h-3 w-1 shrink-0"
-                    style={{ backgroundColor: pilar?.color ?? acento }}
-                  />
-                  <span className="type-mono text-fg-muted">
-                    {PIECE_FORMAT_LABEL[p.format]}
-                    {p.publish_at ? ` · ${formatDate(new Date(p.publish_at))}` : ''}
-                  </span>
-                  {pilar && <span className="type-mono text-fg-muted">{pilar.name}</span>}
-                  {decidida.has(p.id) && (
-                    <span className="type-mono text-ok ml-auto">Ya respondiste</span>
-                  )}
-                </div>
-
-                <div className="flex flex-col gap-4 px-5 py-5">
-                  {p.hook && <p className="type-display text-xl">{p.hook}</p>}
-                  {p.copy_in && <p className="text-[14px] whitespace-pre-wrap">{p.copy_in}</p>}
-                  {p.copy_out && (
-                    <p className="text-fg-muted text-[14px] whitespace-pre-wrap">{p.copy_out}</p>
-                  )}
-                  {p.cta && (
-                    <p className="type-mono" style={{ color: acento }}>
-                      {p.cta}
-                    </p>
-                  )}
-                  {p.hashtags && p.hashtags.length > 0 && (
-                    <p className="text-fg-muted text-[13px]">{p.hashtags.join(' ')}</p>
-                  )}
-                </div>
+              <article key={p.id} className="border-line overflow-hidden rounded-xs border">
+                <PostInstagram
+                  frame={false}
+                  handle={handle}
+                  avatarUrl={avatarUrl}
+                  bio={bio}
+                  brandColor={brandColor}
+                  imageUrl={urls[p.id] ?? null}
+                  format={p.format}
+                  caption={caption}
+                  fecha={p.publish_at ? formatDate(new Date(p.publish_at)) : null}
+                />
 
                 <AccionesPieza
                   clientId={clientId}
