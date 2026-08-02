@@ -41,12 +41,26 @@ export default async function ClientesPage({
             {clientes.length} activos · {formatMonthKey(mes)}
           </Mono>
         </div>
+        <Link
+          href="/clientes/nuevo"
+          className="bg-accent text-on-accent hover:bg-accent-hot type-mono inline-flex items-center gap-2 rounded-xs px-3 py-2 transition-colors duration-150 ease-out"
+        >
+          Dar de alta cliente
+        </Link>
       </header>
 
       {clientes.length === 0 ? (
         <EmptyState
           title="Todavía no hay clientes"
-          body="Cuando des de alta el primero, aquí vas a ver su avance del mes de un vistazo."
+          body="Da de alta el primero y aquí vas a ver su avance del mes de un vistazo."
+          action={
+            <Link
+              href="/clientes/nuevo"
+              className="bg-accent text-on-accent hover:bg-accent-hot type-mono inline-flex items-center gap-2 rounded-xs px-3 py-2 transition-colors duration-150 ease-out"
+            >
+              Dar de alta cliente
+            </Link>
+          }
         />
       ) : (
         <table className="w-full border-collapse text-left">
