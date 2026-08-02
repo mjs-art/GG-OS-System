@@ -155,8 +155,10 @@ function CuerpoDrawer({
 }) {
   const [editados, setEditados] = useState<ReadonlySet<string>>(new Set())
   const [hashtags, setHashtags] = useState(pieza.hashtags.join(' '))
-  // El toggle Editar | Ver como post NO remonta el cuerpo: alterna con `hidden`
-  // para que el texto sin guardar de los campos no se pierda al cambiar de modo.
+  const [hook, setHook] = useState(pieza.hook ?? '')
+  const [copyIn, setCopyIn] = useState(pieza.copyIn ?? '')
+  const [copyOut, setCopyOut] = useState(pieza.copyOut ?? '')
+  const [cta, setCta] = useState(pieza.cta ?? '')
   const [modo, setModo] = useState<'editar' | 'post'>('editar')
   const [vistaPost, setVistaPost] = useState<'instagram' | 'tiktok'>('instagram')
   const tieneTikTok = pieza.platforms.includes('tiktok')
@@ -174,13 +176,21 @@ function CuerpoDrawer({
     .filter(Boolean)
 
   const revision = checkCodeRules(reglas, {
-    hook: pieza.hook,
-    copyIn: pieza.copyIn,
-    copyOut: pieza.copyOut,
-    cta: pieza.cta,
+    hook: hook || null,
+    copyIn: copyIn || null,
+    copyOut: copyOut || null,
+    cta: cta || null,
     hashtags: listaHashtags,
   })
   const problemaHashtags = revision.violations.find((v) => v.field === 'hashtags')
+
+  const captionVivo = componerCaption({
+    hook: hook || null,
+    copyIn: copyIn || null,
+    copyOut: copyOut || null,
+    cta: cta || null,
+    hashtags: listaHashtags,
+  })
 
   /** El chip que va a la derecha del label. */
   const procedencia = (campo: CampoConProcedencia, tieneContenido: boolean): ReactNode => {
@@ -221,6 +231,33 @@ function CuerpoDrawer({
     </section>
   )
 
+  const campoTextoVivo = (
+    campo: CampoConProcedencia,
+    label: string,
+    valor: string,
+    onCambio: (v: string) => void,
+    filas = 2,
+  ) => (
+    <section>
+      <LabelCampo htmlFor={`${campo}-${pieza.id}`} extra={procedencia(campo, Boolean(valor))}>
+        {label}
+      </LabelCampo>
+      <textarea
+        id={`${campo}-${pieza.id}`}
+        rows={filas}
+        value={valor}
+        onChange={(e) => onCambio(e.target.value)}
+        onBlur={(e) => {
+          const nuevo = e.target.value.trim()
+          if (nuevo !== (pieza[campo as keyof typeof pieza] ?? ''))
+            guardar({ campo, valor: nuevo === '' ? null : nuevo })
+        }}
+        className="border-line bg-bg focus:border-accent-hot w-full resize-y rounded-xs border px-3 py-2 text-[13px] leading-relaxed"
+      />
+      {nota(campo)}
+    </section>
+  )
+
   return (
     <div className="flex flex-col gap-6">
       <SegmentedControl
@@ -254,13 +291,7 @@ function CuerpoDrawer({
           imageUrl={contexto.urlAsset}
           fallbackColor={pilares.find((p) => p.id === pieza.pillarId)?.color ?? null}
           format={pieza.format}
-          caption={componerCaption({
-            hook: pieza.hook,
-            copyIn: pieza.copyIn,
-            copyOut: pieza.copyOut,
-            cta: pieza.cta,
-            hashtags: pieza.hashtags,
-          })}
+          caption={captionVivo}
           fecha={pieza.publishAt ? formatDate(new Date(pieza.publishAt)) : null}
         />
       )}
@@ -274,13 +305,7 @@ function CuerpoDrawer({
           imageUrl={contexto.urlAsset}
           fallbackColor={pilares.find((p) => p.id === pieza.pillarId)?.color ?? null}
           format={pieza.format}
-          caption={componerCaption({
-            hook: pieza.hook,
-            copyIn: pieza.copyIn,
-            copyOut: pieza.copyOut,
-            cta: pieza.cta,
-            hashtags: pieza.hashtags,
-          })}
+          caption={captionVivo}
           fecha={pieza.publishAt ? formatDate(new Date(pieza.publishAt)) : null}
         />
       )}
@@ -294,13 +319,7 @@ function CuerpoDrawer({
           imageUrl={contexto.urlAsset}
           fallbackColor={pilares.find((p) => p.id === pieza.pillarId)?.color ?? null}
           format={pieza.format}
-          caption={componerCaption({
-            hook: pieza.hook,
-            copyIn: pieza.copyIn,
-            copyOut: pieza.copyOut,
-            cta: pieza.cta,
-            hashtags: pieza.hashtags,
-          })}
+          caption={captionVivo}
           fecha={pieza.publishAt ? formatDate(new Date(pieza.publishAt)) : null}
         />
       )}
@@ -494,11 +513,11 @@ function CuerpoDrawer({
 
         {/* --- Qué dice ------------------------------------------------------ */}
         {campoTexto('idea', 'Idea', pieza.idea)}
-        {campoTexto('hook', 'Hook', pieza.hook)}
+        {campoTextoVivo('hook', 'Hook', hook, setHook)}
         {campoTexto('script', 'Guion', pieza.script, 8)}
-        {campoTexto('copy_in', 'Copy in', pieza.copyIn, 4)}
-        {campoTexto('copy_out', 'Copy out', pieza.copyOut, 3)}
-        {campoTexto('cta', 'CTA', pieza.cta, 1)}
+        {campoTextoVivo('copy_in', 'Copy in', copyIn, setCopyIn, 4)}
+        {campoTextoVivo('copy_out', 'Copy out', copyOut, setCopyOut, 3)}
+        {campoTextoVivo('cta', 'CTA', cta, setCta, 1)}
 
         <section>
           <LabelCampo
