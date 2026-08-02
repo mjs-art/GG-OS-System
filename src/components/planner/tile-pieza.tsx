@@ -71,7 +71,7 @@ export function TilePieza({
         </div>
       ) : (
         <Image
-          src={imagenDePieza(pieza.id)}
+          src={pieza.imageUrl ?? imagenDePieza(pieza.id)}
           alt=""
           fill
           sizes={columnas === 5 ? '18vw' : '30vw'}
@@ -146,7 +146,7 @@ export function TileFantasma({
         </div>
       ) : (
         <Image
-          src={imagenDePieza(pieza.id)}
+          src={pieza.imageUrl ?? imagenDePieza(pieza.id)}
           alt=""
           fill
           sizes="30vw"

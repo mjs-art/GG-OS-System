@@ -278,7 +278,7 @@ export function PlannerCliente({
 
       <DrawerPieza
         pieza={abierta ? piezas.find((p) => p.id === abierta) : undefined}
-        pilares={cliente.pilares}
+        cliente={cliente}
         reglas={reglas}
         onCerrar={() => setAbierta(null)}
         onGuardar={alGuardar}

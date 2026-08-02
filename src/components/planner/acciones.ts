@@ -207,3 +207,67 @@ export async function editarPieza(entrada: unknown): Promise<ResultadoAccion> {
   refrescar(parsed.data.slug)
   return { ok: true }
 }
+
+/* --- Subir la imagen de una pieza ------------------------------------------ */
+
+const MIME_OK = ['image/jpeg', 'image/png', 'image/webp'] as const
+const MAX_BYTES = 10 * 1024 * 1024
+
+const entradaSubida = z.object({ slug, clientId: uuid, pieceId: uuid })
+
+const archivoImagen = z
+  .instanceof(File)
+  .refine((f) => f.size > 0 && f.size <= MAX_BYTES, 'La imagen no puede pesar más de 10 MB.')
+  .refine(
+    (f) => (MIME_OK as readonly string[]).includes(f.type),
+    'Solo se aceptan JPG, PNG o WebP.',
+  )
+
+/**
+ * Sube la foto de una pieza y la asocia a la fila.
+ *
+ * La imagen va a un bucket PRIVADO con el path `{clientId}/{pieceId}` —sin
+ * extensión, para que `upsert` sobrescriba el mismo objeto y no deje huérfanos.
+ * No hay un solo `if` de permiso aquí: el cliente es el de sesión (no admin),
+ * así que la RLS de `storage.objects` y de `pieces` decide. Un usuario del
+ * portal que llame esta acción es rechazado dos veces —la política de escritura
+ * de storage es solo para el estudio, y `pieces` no tiene UPDATE para el portal
+ * (lo delata `count === 0`).
+ */
+export async function subirImagenPieza(formData: FormData): Promise<ResultadoAccion> {
+  const meta = entradaSubida.safeParse({
+    slug: formData.get('slug'),
+    clientId: formData.get('clientId'),
+    pieceId: formData.get('pieceId'),
+  })
+  if (!meta.success) return { ok: false, mensaje: DATOS_INVALIDOS }
+
+  const archivo = archivoImagen.safeParse(formData.get('file'))
+  if (!archivo.success) {
+    return { ok: false, mensaje: archivo.error.issues[0]?.message ?? DATOS_INVALIDOS }
+  }
+
+  const path = `${meta.data.clientId}/${meta.data.pieceId}`
+  const supabase = await createClient()
+
+  const { error: errorSubida } = await supabase.storage
+    .from('images')
+    .upload(path, archivo.data, { upsert: true, contentType: archivo.data.type })
+  if (errorSubida) return fallo(errorSubida, 'No se pudo subir la imagen.')
+
+  const { error, count } = await supabase
+    .from('pieces')
+    .update({ image_path: path }, { count: 'exact' })
+    .eq('id', meta.data.pieceId)
+
+  if (error) return fallo(error, 'No se pudo asociar la imagen a la pieza.')
+  if (count === 0) {
+    return {
+      ok: false,
+      mensaje: 'Esta pieza ya no está en tu cuenta o alguien la borró. Recarga el planner.',
+    }
+  }
+
+  refrescar(meta.data.slug)
+  return { ok: true }
+}

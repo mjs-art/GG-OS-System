@@ -891,6 +891,8 @@ export type Database = {
       clients: {
         Row: {
           archived_at: string | null
+          avatar_url: string | null
+          bio: string | null
           brand_color: string | null
           created_at: string
           handle: string | null
@@ -904,6 +906,8 @@ export type Database = {
         }
         Insert: {
           archived_at?: string | null
+          avatar_url?: string | null
+          bio?: string | null
           brand_color?: string | null
           created_at?: string
           handle?: string | null
@@ -917,6 +921,8 @@ export type Database = {
         }
         Update: {
           archived_at?: string | null
+          avatar_url?: string | null
+          bio?: string | null
           brand_color?: string | null
           created_at?: string
           handle?: string | null
@@ -1496,6 +1502,7 @@ export type Database = {
           hook: string | null
           id: string
           idea: string | null
+          image_path: string | null
           month: string
           org_id: string
           pillar_id: string | null
@@ -1527,6 +1534,7 @@ export type Database = {
           hook?: string | null
           id?: string
           idea?: string | null
+          image_path?: string | null
           month: string
           org_id: string
           pillar_id?: string | null
@@ -1558,6 +1566,7 @@ export type Database = {
           hook?: string | null
           id?: string
           idea?: string | null
+          image_path?: string | null
           month?: string
           org_id?: string
           pillar_id?: string | null

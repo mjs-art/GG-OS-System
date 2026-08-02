@@ -82,7 +82,10 @@ const securityHeaders = [
         : "script-src 'self' 'unsafe-inline'",
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "font-src 'self' https://fonts.gstatic.com data:",
-      "img-src 'self' data: blob: https://images.unsplash.com https://*.supabase.co",
+      // En dev, las URLs firmadas de Storage salen del Supabase local
+      // (127.0.0.1:54321); en prod van por *.supabase.co, ya cubierto.
+      "img-src 'self' data: blob: https://images.unsplash.com https://*.supabase.co" +
+        (isDev ? ' http://127.0.0.1:54321' : ''),
       "connect-src 'self' https://*.supabase.co wss://*.supabase.co" +
         (isDev ? ' http://127.0.0.1:54321 ws://127.0.0.1:54321' : ''),
       "frame-ancestors 'none'",
@@ -118,6 +121,8 @@ const nextConfig: NextConfig = {
     remotePatterns: [
       { protocol: 'https', hostname: 'images.unsplash.com' },
       { protocol: 'https', hostname: '*.supabase.co' },
+      // Storage local en dev: las URLs firmadas apuntan a 127.0.0.1:54321.
+      ...(isDev ? [{ protocol: 'http' as const, hostname: '127.0.0.1', port: '54321' }] : []),
     ],
   },
 

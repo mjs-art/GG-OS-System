@@ -1,8 +1,11 @@
 'use client'
 
-import { Lock, LockOpen } from 'lucide-react'
-import { useState, type ReactNode } from 'react'
+import { ImagePlus, Lock, LockOpen } from 'lucide-react'
+import { useRef, useState, useTransition, type ReactNode } from 'react'
+import { toast } from 'sonner'
 import { Button, Chip, Mono } from '@/components/ui/primitives'
+import { PostInstagram } from '@/components/post/post-instagram'
+import { subirImagenPieza } from '@/components/planner/acciones'
 import { Interruptor, LabelCampo, SegmentedControl } from '@/components/planner/controles'
 import { Drawer } from '@/components/planner/drawer'
 import {
@@ -11,10 +14,11 @@ import {
   FORMATOS,
   PLATAFORMAS,
   type CampoConProcedencia,
+  type Cliente,
   type Pieza,
-  type Pilar,
 } from '@/components/planner/tipos'
 import { checkCodeRules, type CodeRule } from '@/domain/brand-rules'
+import { componerCaption } from '@/domain/post-preview'
 import {
   AGENT_LABEL,
   PIECE_FORMAT_LABEL,
@@ -25,6 +29,7 @@ import {
   type PieceStatus,
   type Platform,
 } from '@/domain/labels'
+import { formatDate } from '@/lib/time'
 
 /**
  * § Planner · Detalle de pieza.
@@ -48,14 +53,14 @@ export interface CambioDePieza {
 
 export function DrawerPieza({
   pieza,
-  pilares,
+  cliente,
   reglas,
   onCerrar,
   onGuardar,
   onAccionDeAgente,
 }: {
   pieza: Pieza | undefined
-  pilares: readonly Pilar[]
+  cliente: Cliente
   reglas: readonly CodeRule[]
   onCerrar: () => void
   onGuardar: (pieceId: string, cambio: CambioDePieza) => void
@@ -93,7 +98,7 @@ export function DrawerPieza({
         <CuerpoDrawer
           key={pieza.id}
           pieza={pieza}
-          pilares={pilares}
+          cliente={cliente}
           reglas={reglas}
           onGuardar={onGuardar}
         />
@@ -104,17 +109,23 @@ export function DrawerPieza({
 
 function CuerpoDrawer({
   pieza,
-  pilares,
+  cliente,
   reglas,
   onGuardar,
 }: {
   pieza: Pieza
-  pilares: readonly Pilar[]
+  cliente: Cliente
   reglas: readonly CodeRule[]
   onGuardar: (pieceId: string, cambio: CambioDePieza) => void
 }) {
+  const pilares = cliente.pilares
   const [editados, setEditados] = useState<ReadonlySet<string>>(new Set())
   const [hashtags, setHashtags] = useState(pieza.hashtags.join(' '))
+  // El toggle Editar | Ver como post NO remonta el cuerpo: alterna con `hidden`
+  // para que el texto sin guardar de los campos no se pierda al cambiar de modo.
+  // Es la clase de falso bug que ya mordió ("los tiles desaparecían al cambiar
+  // de modo"): un cambio de vista no debe tirar estado del DOM.
+  const [modo, setModo] = useState<'editar' | 'post'>('editar')
 
   const guardar = (cambio: CambioDePieza) => {
     setEditados((previos) => new Set(previos).add(cambio.campo))
@@ -176,195 +187,284 @@ function CuerpoDrawer({
 
   return (
     <div className="flex flex-col gap-6">
-      {/* --- Dónde encaja ------------------------------------------------- */}
-      <section>
-        <LabelCampo htmlFor={`pilar-${pieza.id}`}>Pilar</LabelCampo>
-        <div className="flex items-center gap-2">
-          <span
-            aria-hidden
-            className="h-6 w-1 shrink-0"
-            style={{
-              backgroundColor:
-                pilares.find((p) => p.id === pieza.pillarId)?.color ?? 'var(--color-line)',
-            }}
+      <SegmentedControl
+        etiqueta="Modo del detalle de la pieza"
+        valor={modo}
+        onCambio={setModo}
+        opciones={[
+          { id: 'editar', label: 'Editar' },
+          { id: 'post', label: 'Ver como post' },
+        ]}
+      />
+
+      {modo === 'post' && <VistaComoPost pieza={pieza} cliente={cliente} />}
+
+      {/* El formulario se oculta con `hidden`, no se desmonta: así el texto sin
+          guardar de un campo no se pierde al asomarse al preview y volver. */}
+      <div className={modo === 'post' ? 'hidden' : 'flex flex-col gap-6'}>
+        {/* --- Dónde encaja ------------------------------------------------- */}
+        <section>
+          <LabelCampo htmlFor={`pilar-${pieza.id}`}>Pilar</LabelCampo>
+          <div className="flex items-center gap-2">
+            <span
+              aria-hidden
+              className="h-6 w-1 shrink-0"
+              style={{
+                backgroundColor:
+                  pilares.find((p) => p.id === pieza.pillarId)?.color ?? 'var(--color-line)',
+              }}
+            />
+            <select
+              id={`pilar-${pieza.id}`}
+              value={pieza.pillarId ?? ''}
+              onChange={(e) => guardar({ campo: 'pillar_id', valor: e.target.value || null })}
+              className="border-line bg-bg text-fg flex-1 rounded-xs border px-3 py-2 text-[13px]"
+            >
+              <option value="">Sin pilar</option>
+              {pilares.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        </section>
+
+        <section>
+          <LabelCampo>Formato</LabelCampo>
+          <SegmentedControl
+            etiqueta="Formato de la pieza"
+            valor={pieza.format}
+            onCambio={(v) => guardar({ campo: 'format', valor: v as PieceFormat })}
+            opciones={FORMATOS.map((f) => ({ id: f, label: PIECE_FORMAT_LABEL[f] }))}
           />
+        </section>
+
+        <section>
+          <LabelCampo>Plataformas</LabelCampo>
+          <div className="flex flex-wrap gap-2">
+            {PLATAFORMAS.map((p) => {
+              const puesta = pieza.platforms.includes(p)
+              return (
+                <button
+                  key={p}
+                  type="button"
+                  onClick={() =>
+                    guardar({
+                      campo: 'platforms',
+                      valor: puesta
+                        ? pieza.platforms.filter((x) => x !== p)
+                        : [...pieza.platforms, p],
+                    })
+                  }
+                  className="rounded-xs"
+                  aria-pressed={puesta}
+                >
+                  <Chip tone={puesta ? 'accent' : 'neutral'}>
+                    {PLATFORM_LABEL[p as Platform] ?? p}
+                  </Chip>
+                </button>
+              )
+            })}
+          </div>
+        </section>
+
+        <section>
+          <LabelCampo htmlFor={`fecha-${pieza.id}`}>Fecha y hora</LabelCampo>
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              id={`fecha-${pieza.id}`}
+              type="datetime-local"
+              defaultValue={paraInput(pieza.publishAt)}
+              onBlur={(e) => {
+                const nuevo = e.target.value ? new Date(e.target.value).toISOString() : null
+                if (nuevo !== pieza.publishAt) {
+                  guardar({ campo: 'fecha', valor: nuevo, dateLocked: pieza.dateLocked })
+                }
+              }}
+              className="border-line bg-bg text-fg flex-1 rounded-xs border px-3 py-2 text-[13px]"
+            />
+            <Interruptor
+              activo={pieza.dateLocked}
+              onCambio={(v) => guardar({ campo: 'fecha', valor: pieza.publishAt, dateLocked: v })}
+            >
+              {pieza.dateLocked ? (
+                <>
+                  <Lock aria-hidden className="size-3" /> Amarrada
+                </>
+              ) : (
+                <>
+                  <LockOpen aria-hidden className="size-3" /> Se puede mover
+                </>
+              )}
+            </Interruptor>
+          </div>
+          <p className="text-fg-muted mt-1.5 text-[12px]">
+            Con el candado puesto, el grid se niega a moverla al arrastrar.
+          </p>
+        </section>
+
+        <section>
+          <LabelCampo htmlFor={`estado-${pieza.id}`}>Estado</LabelCampo>
           <select
-            id={`pilar-${pieza.id}`}
-            value={pieza.pillarId ?? ''}
-            onChange={(e) => guardar({ campo: 'pillar_id', valor: e.target.value || null })}
-            className="border-line bg-bg text-fg flex-1 rounded-xs border px-3 py-2 text-[13px]"
+            id={`estado-${pieza.id}`}
+            value={pieza.status}
+            onChange={(e) => guardar({ campo: 'status', valor: e.target.value as PieceStatus })}
+            className="border-line bg-bg text-fg w-full rounded-xs border px-3 py-2 text-[13px]"
           >
-            <option value="">Sin pilar</option>
-            {pilares.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
+            {ESTADOS.map((e) => (
+              <option key={e} value={e}>
+                {PIECE_STATUS_LABEL[e]}
               </option>
             ))}
           </select>
-        </div>
-      </section>
+        </section>
 
-      <section>
-        <LabelCampo>Formato</LabelCampo>
-        <SegmentedControl
-          etiqueta="Formato de la pieza"
-          valor={pieza.format}
-          onCambio={(v) => guardar({ campo: 'format', valor: v as PieceFormat })}
-          opciones={FORMATOS.map((f) => ({ id: f, label: PIECE_FORMAT_LABEL[f] }))}
-        />
-      </section>
+        {/* --- Qué dice ------------------------------------------------------ */}
+        {campoTexto('idea', 'Idea', pieza.idea)}
+        {campoTexto('hook', 'Hook', pieza.hook)}
+        {campoTexto('script', 'Guion', pieza.script, 8)}
+        {campoTexto('copy_in', 'Copy in', pieza.copyIn, 4)}
+        {campoTexto('copy_out', 'Copy out', pieza.copyOut, 3)}
+        {campoTexto('cta', 'CTA', pieza.cta, 1)}
 
-      <section>
-        <LabelCampo>Plataformas</LabelCampo>
-        <div className="flex flex-wrap gap-2">
-          {PLATAFORMAS.map((p) => {
-            const puesta = pieza.platforms.includes(p)
-            return (
-              <button
-                key={p}
-                type="button"
-                onClick={() =>
-                  guardar({
-                    campo: 'platforms',
-                    valor: puesta
-                      ? pieza.platforms.filter((x) => x !== p)
-                      : [...pieza.platforms, p],
-                  })
-                }
-                className="rounded-xs"
-                aria-pressed={puesta}
-              >
-                <Chip tone={puesta ? 'accent' : 'neutral'}>
-                  {PLATFORM_LABEL[p as Platform] ?? p}
-                </Chip>
-              </button>
-            )
-          })}
-        </div>
-      </section>
-
-      <section>
-        <LabelCampo htmlFor={`fecha-${pieza.id}`}>Fecha y hora</LabelCampo>
-        <div className="flex flex-wrap items-center gap-2">
-          <input
-            id={`fecha-${pieza.id}`}
-            type="datetime-local"
-            defaultValue={paraInput(pieza.publishAt)}
-            onBlur={(e) => {
-              const nuevo = e.target.value ? new Date(e.target.value).toISOString() : null
-              if (nuevo !== pieza.publishAt) {
-                guardar({ campo: 'fecha', valor: nuevo, dateLocked: pieza.dateLocked })
+        <section>
+          <LabelCampo
+            htmlFor={`hashtags-${pieza.id}`}
+            extra={procedencia('hashtags', pieza.hashtags.length > 0)}
+          >
+            Hashtags
+          </LabelCampo>
+          <textarea
+            id={`hashtags-${pieza.id}`}
+            rows={2}
+            value={hashtags}
+            onChange={(e) => setHashtags(e.target.value)}
+            onBlur={() => {
+              const antes = pieza.hashtags.join(' ')
+              if (listaHashtags.join(' ') !== antes) {
+                guardar({ campo: 'hashtags', valor: listaHashtags })
               }
             }}
-            className="border-line bg-bg text-fg flex-1 rounded-xs border px-3 py-2 text-[13px]"
+            className="border-line bg-bg focus:border-accent-hot w-full resize-y rounded-xs border px-3 py-2 text-[13px]"
           />
-          <Interruptor
-            activo={pieza.dateLocked}
-            onCambio={(v) => guardar({ campo: 'fecha', valor: pieza.publishAt, dateLocked: v })}
-          >
-            {pieza.dateLocked ? (
-              <>
-                <Lock aria-hidden className="size-3" /> Amarrada
-              </>
-            ) : (
-              <>
-                <LockOpen aria-hidden className="size-3" /> Se puede mover
-              </>
+          <div className="mt-1.5 flex items-baseline justify-between gap-3">
+            <Mono className={problemaHashtags ? 'text-accent-hot' : 'text-fg-muted'}>
+              {listaHashtags.length} {listaHashtags.length === 1 ? 'hashtag' : 'hashtags'}
+            </Mono>
+            {problemaHashtags && (
+              <p className="text-accent-hot text-right text-[12px]">
+                {problemaHashtags.found} {problemaHashtags.fix}
+              </p>
             )}
+          </div>
+          {nota('hashtags')}
+        </section>
+
+        {/* --- Logística ----------------------------------------------------- */}
+        <section>
+          <LabelCampo>Asset</LabelCampo>
+          <SegmentedControl
+            etiqueta="Estado del asset"
+            valor={pieza.assetStatus}
+            onCambio={(v) => guardar({ campo: 'asset_status', valor: v })}
+            opciones={[
+              { id: 'pendiente', label: 'Pendiente' },
+              { id: 'recibido', label: 'Recibido' },
+            ]}
+          />
+          <p className="text-fg-muted mt-1.5 text-[12px]">
+            Solo el estado. Los archivos viven en la carpeta del cliente, no aquí.
+          </p>
+        </section>
+
+        <section>
+          <LabelCampo>Pauta</LabelCampo>
+          <Interruptor
+            activo={pieza.boosted}
+            onCambio={(v) => guardar({ campo: 'boosted', valor: v })}
+          >
+            Impulsar esta pieza
           </Interruptor>
-        </div>
-        <p className="text-fg-muted mt-1.5 text-[12px]">
-          Con el candado puesto, el grid se niega a moverla al arrastrar.
-        </p>
-      </section>
+          <p className="text-fg-muted mt-1.5 text-[12px]">
+            La campaña y el ad set al que entra se eligen en la sección Pauta, junto con el
+            presupuesto. Aquí solo se marca que la pieza va a llevar dinero atrás.
+          </p>
+        </section>
+      </div>
+    </div>
+  )
+}
 
-      <section>
-        <LabelCampo htmlFor={`estado-${pieza.id}`}>Estado</LabelCampo>
-        <select
-          id={`estado-${pieza.id}`}
-          value={pieza.status}
-          onChange={(e) => guardar({ campo: 'status', valor: e.target.value as PieceStatus })}
-          className="border-line bg-bg text-fg w-full rounded-xs border px-3 py-2 text-[13px]"
-        >
-          {ESTADOS.map((e) => (
-            <option key={e} value={e}>
-              {PIECE_STATUS_LABEL[e]}
-            </option>
-          ))}
-        </select>
-      </section>
+/**
+ * El preview de la pieza como publicación de Instagram, más el control para
+ * subir su foto.
+ *
+ * La subida vive aquí y no en el formulario de edición a propósito: la imagen es
+ * lo primero que uno quiere ver junto al mockup, y el resultado se comprueba en
+ * el mismo cuadro. El Server Action revalida la ruta, así que al terminar la
+ * página llega con la imagen ya firmada y el preview se actualiza solo.
+ */
+function VistaComoPost({ pieza, cliente }: { pieza: Pieza; cliente: Cliente }) {
+  const [subiendo, empezarSubida] = useTransition()
+  const inputRef = useRef<HTMLInputElement>(null)
 
-      {/* --- Qué dice ------------------------------------------------------ */}
-      {campoTexto('idea', 'Idea', pieza.idea)}
-      {campoTexto('hook', 'Hook', pieza.hook)}
-      {campoTexto('script', 'Guion', pieza.script, 8)}
-      {campoTexto('copy_in', 'Copy in', pieza.copyIn, 4)}
-      {campoTexto('copy_out', 'Copy out', pieza.copyOut, 3)}
-      {campoTexto('cta', 'CTA', pieza.cta, 1)}
+  const caption = componerCaption({
+    hook: pieza.hook,
+    copyIn: pieza.copyIn,
+    copyOut: pieza.copyOut,
+    cta: pieza.cta,
+    hashtags: pieza.hashtags,
+  })
 
-      <section>
-        <LabelCampo
-          htmlFor={`hashtags-${pieza.id}`}
-          extra={procedencia('hashtags', pieza.hashtags.length > 0)}
-        >
-          Hashtags
-        </LabelCampo>
-        <textarea
-          id={`hashtags-${pieza.id}`}
-          rows={2}
-          value={hashtags}
-          onChange={(e) => setHashtags(e.target.value)}
-          onBlur={() => {
-            const antes = pieza.hashtags.join(' ')
-            if (listaHashtags.join(' ') !== antes) {
-              guardar({ campo: 'hashtags', valor: listaHashtags })
-            }
+  const alElegirArchivo = (archivo: File) => {
+    const datos = new FormData()
+    datos.set('slug', cliente.slug)
+    datos.set('clientId', cliente.id)
+    datos.set('pieceId', pieza.id)
+    datos.set('file', archivo)
+
+    empezarSubida(async () => {
+      const r = await subirImagenPieza(datos)
+      if (r.ok) toast.success('Imagen actualizada.')
+      else toast.error('No se pudo subir la imagen.', { description: r.mensaje })
+      if (inputRef.current) inputRef.current.value = ''
+    })
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      <PostInstagram
+        handle={cliente.handle}
+        avatarUrl={cliente.avatarUrl}
+        bio={cliente.bio}
+        brandColor={cliente.brandColor}
+        imageUrl={pieza.imageUrl}
+        fallbackSeed={pieza.id}
+        format={pieza.format}
+        caption={caption}
+        fecha={pieza.publishAt ? formatDate(new Date(pieza.publishAt)) : null}
+      />
+
+      <div className="flex flex-col gap-2">
+        <input
+          ref={inputRef}
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          className="sr-only"
+          onChange={(e) => {
+            const archivo = e.target.files?.[0]
+            if (archivo) alElegirArchivo(archivo)
           }}
-          className="border-line bg-bg focus:border-accent-hot w-full resize-y rounded-xs border px-3 py-2 text-[13px]"
         />
-        <div className="mt-1.5 flex items-baseline justify-between gap-3">
-          <Mono className={problemaHashtags ? 'text-accent-hot' : 'text-fg-muted'}>
-            {listaHashtags.length} {listaHashtags.length === 1 ? 'hashtag' : 'hashtags'}
-          </Mono>
-          {problemaHashtags && (
-            <p className="text-accent-hot text-right text-[12px]">
-              {problemaHashtags.found} {problemaHashtags.fix}
-            </p>
-          )}
-        </div>
-        {nota('hashtags')}
-      </section>
-
-      {/* --- Logística ----------------------------------------------------- */}
-      <section>
-        <LabelCampo>Asset</LabelCampo>
-        <SegmentedControl
-          etiqueta="Estado del asset"
-          valor={pieza.assetStatus}
-          onCambio={(v) => guardar({ campo: 'asset_status', valor: v })}
-          opciones={[
-            { id: 'pendiente', label: 'Pendiente' },
-            { id: 'recibido', label: 'Recibido' },
-          ]}
-        />
-        <p className="text-fg-muted mt-1.5 text-[12px]">
-          Solo el estado. Los archivos viven en la carpeta del cliente, no aquí.
+        <Button variant="secondary" onClick={() => inputRef.current?.click()} disabled={subiendo}>
+          <ImagePlus aria-hidden className="size-4" />
+          {subiendo ? 'Subiendo…' : pieza.imageUrl ? 'Reemplazar imagen' : 'Subir imagen'}
+        </Button>
+        <p className="text-fg-muted text-[12px]">
+          JPG, PNG o WebP, hasta 10 MB. Se ve así en el grid y en lo que revisa el cliente.
         </p>
-      </section>
-
-      <section>
-        <LabelCampo>Pauta</LabelCampo>
-        <Interruptor
-          activo={pieza.boosted}
-          onCambio={(v) => guardar({ campo: 'boosted', valor: v })}
-        >
-          Impulsar esta pieza
-        </Interruptor>
-        <p className="text-fg-muted mt-1.5 text-[12px]">
-          La campaña y el ad set al que entra se eligen en la sección Pauta, junto con el
-          presupuesto. Aquí solo se marca que la pieza va a llevar dinero atrás.
-        </p>
-      </section>
+      </div>
     </div>
   )
 }

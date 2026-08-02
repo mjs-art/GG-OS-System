@@ -105,6 +105,9 @@ export interface Cliente {
   handle: string | null
   tier: string | null
   brandColor: string | null
+  /** Identidad pública de la cuenta: el header del post de Instagram. */
+  avatarUrl: string | null
+  bio: string | null
   timezone: string
   pilares: Pilar[]
 }
@@ -115,7 +118,7 @@ export async function obtenerCliente(slug: string): Promise<Cliente | null> {
   const { data, error } = await supabase
     .from('clients')
     .select(
-      'id, org_id, slug, name, handle, tier, brand_color, timezone, pillars(id, name, color, target_pct, position)',
+      'id, org_id, slug, name, handle, tier, brand_color, avatar_url, bio, timezone, pillars(id, name, color, target_pct, position)',
     )
     .eq('slug', slug)
     .is('archived_at', null)
@@ -132,6 +135,8 @@ export async function obtenerCliente(slug: string): Promise<Cliente | null> {
     handle: data.handle,
     tier: data.tier,
     brandColor: data.brand_color,
+    avatarUrl: data.avatar_url,
+    bio: data.bio,
     timezone: data.timezone,
     pilares: (data.pillars ?? [])
       .map((p) => ({
@@ -164,8 +169,36 @@ export interface Pieza {
   hashtags: string[]
   assetStatus: 'pendiente' | 'recibido'
   boosted: boolean
+  /**
+   * URL FIRMADA de la imagen de la pieza, o `null` si no tiene asset todavía.
+   * El bucket es privado, así que la firma se genera aquí en el servidor; el
+   * cliente jamás ve el path ni puede firmar. `null` → el grid cae al placeholder.
+   */
+  imageUrl: string | null
   /** Qué agente escribió cada campo. Vacío = lo escribió una persona. */
   authoredBy: Record<string, string>
+}
+
+/**
+ * Firma en lote los paths de Storage y regresa un mapa path → URL firmada.
+ *
+ * Se firma en batch (una llamada, no una por pieza) y se tolera el objeto que
+ * no existe: `createSignedUrls` reporta el error por-item, y ahí devolvemos
+ * `null` para que la superficie caiga al placeholder en vez de romperse. La
+ * hora de expiry es holgada para no re-firmar en cada render.
+ */
+export async function firmarImagenes(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  paths: readonly string[],
+): Promise<Map<string, string>> {
+  const firmadas = new Map<string, string>()
+  if (paths.length === 0) return firmadas
+
+  const { data } = await supabase.storage.from('images').createSignedUrls([...paths], 60 * 60)
+  for (const item of data ?? []) {
+    if (item.signedUrl && item.path && !item.error) firmadas.set(item.path, item.signedUrl)
+  }
+  return firmadas
 }
 
 export async function listarPiezas(clientId: string, mes: MonthKey): Promise<Pieza[]> {
@@ -180,7 +213,11 @@ export async function listarPiezas(clientId: string, mes: MonthKey): Promise<Pie
 
   if (error) throw new Error(`No se pudieron leer las piezas: ${error.message}`)
 
-  return (data ?? []).map((p) => ({
+  const filas = data ?? []
+  const paths = filas.map((p) => p.image_path).filter((v): v is string => v !== null)
+  const firmadas = await firmarImagenes(supabase, paths)
+
+  return filas.map((p) => ({
     id: p.id,
     pillarId: p.pillar_id,
     month: p.month as MonthKey,
@@ -199,6 +236,7 @@ export async function listarPiezas(clientId: string, mes: MonthKey): Promise<Pie
     hashtags: p.hashtags ?? [],
     assetStatus: p.asset_status,
     boosted: p.boosted,
+    imageUrl: p.image_path ? (firmadas.get(p.image_path) ?? null) : null,
     authoredBy: (p.authored_by ?? {}) as Record<string, string>,
   }))
 }
