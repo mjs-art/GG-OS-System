@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useMemo, useState, useTransition } from 'react'
-import { toast, Toaster } from 'sonner'
+import { toast } from 'sonner'
 import { RejillaMes, type EntradaCalendario } from '@/components/calendario/rejilla-mes'
 import { Display, Mono } from '@/components/ui/primitives'
 import {
@@ -120,7 +120,6 @@ export function PlannerCliente({
   const alSoltar = useCallback(
     (origenId: string, destinoId: string): ResultadoSoltar => {
       const resultado = reordenar({ piezas: ordenadas, origenId, destinoId, modo })
-      console.warn('[dnd] reordenar', modo, JSON.stringify(resultado).slice(0, 300))
 
       if (!resultado.ok) {
         if (resultado.motivo === 'bloqueada') {
@@ -284,19 +283,6 @@ export function PlannerCliente({
         onCerrar={() => setAbierta(null)}
         onGuardar={alGuardar}
         onAccionDeAgente={anunciarAgente}
-      />
-
-      {/* Sonner trae sus propios colores; se le imponen los tokens del tema
-          para que el toast no sea la única superficie clara de la pantalla. */}
-      <Toaster
-        position="bottom-right"
-        toastOptions={{
-          classNames: {
-            toast: 'type-mono border-line bg-surface text-fg rounded-xs border',
-            description: 'text-fg-muted normal-case',
-            actionButton: 'bg-accent text-on-accent',
-          },
-        }}
       />
     </>
   )

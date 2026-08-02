@@ -162,12 +162,9 @@ export function VistaGrid({
     const destino = e.over ? String(e.over.id) : null
     setActivoId(null)
     setSobreId(null)
-    console.warn('[dnd] over', destino, 'active', origen)
     if (!destino || destino === origen) return
 
-    console.warn('[dnd] end', origen, destino)
     const { movido, bloqueadaId } = onSoltar(origen, destino)
-    console.warn('[dnd] res', movido, bloqueadaId)
 
     if (bloqueadaId) {
       // El tile tiembla donde está la mirada; el toast explica por qué.
@@ -242,7 +239,6 @@ export function VistaGrid({
         onDragOver={alPasarEncima}
         onDragEnd={alTerminar}
         onDragCancel={() => {
-          console.warn('[dnd] cancel')
           setActivoId(null)
           setSobreId(null)
         }}

@@ -102,6 +102,12 @@ const nextConfig: NextConfig = {
   // decimos y de paso evitamos que suba de directorio buscando otra.
   turbopack: { root: import.meta.dirname },
 
+  // `next dev` escucha en localhost pero las pruebas y el resto del proyecto
+  // hablan por 127.0.0.1. Sin esto Next bloquea el HMR por cross-origin, la
+  // app nunca termina de hidratar, y cualquier prueba que espere interacción
+  // se cuelga sin decir por qué.
+  allowedDevOrigins: ['127.0.0.1'],
+
   env: envInyectado,
 
   // A type error must never reach production. Lint runs as its own CI gate

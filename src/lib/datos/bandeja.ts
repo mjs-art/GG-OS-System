@@ -2,6 +2,7 @@ import 'server-only'
 
 import { z } from 'zod'
 import type { Escalamiento } from '@/domain/bandeja'
+import { esErrorDeSesion } from '@/lib/datos/errores'
 import { createClient } from '@/lib/supabase/server'
 import { STUDIO_TIMEZONE } from '@/lib/time'
 
@@ -106,7 +107,18 @@ export async function listarEscalamientos(): Promise<Escalamiento[]> {
     .is('resolved_at', null)
     .order('created_at', { ascending: true })
 
-  if (error) throw new Error(`No se pudo leer la bandeja: ${error.message}`)
+  if (error) {
+    // Un token que el servidor todavía no acepta —deriva de reloj entre
+    // servicios— no es un bug de la app, y tumbar la página por eso deja al
+    // usuario sin nada cuando lo único que hacía falta era recargar. El proxy
+    // ya lo manda al login en la siguiente navegación si la sesión de verdad
+    // murió. Se registra, no se esconde.
+    if (esErrorDeSesion(error)) {
+      console.warn(`Bandeja: la sesión no fue aceptada (${error.code}). Se muestra vacía.`)
+      return []
+    }
+    throw new Error(`No se pudo leer la bandeja: ${error.message}`)
+  }
   if (!data?.length) return []
 
   // Los colores de pilar se traen en una sola consulta aparte en vez de anidar

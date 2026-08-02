@@ -1,7 +1,7 @@
 'use client'
 
 import { useActionState, useEffect, useRef, useState } from 'react'
-import { Toaster, toast } from 'sonner'
+import { toast } from 'sonner'
 import { recalcularVolumen, type EstadoVolumen } from '@/components/volumen/acciones'
 import { Button, Chip, Display, Mono } from '@/components/ui/primitives'
 import type { MonthKey } from '@/lib/time'
@@ -35,25 +35,6 @@ export function AccionesPlan({
 
   return (
     <div className="mt-8 flex flex-wrap items-center gap-3" data-print="hide">
-      {/* El Toaster se monta aquí y no en el layout raíz porque esta sección es
-          la única que avisa por toast. Si algún día lo necesita otra pantalla,
-          sube al layout — montarlo dos veces duplica los avisos. */}
-      <Toaster
-        position="bottom-right"
-        toastOptions={{
-          // Los estilos por token, no por tema de sonner: el suyo trae sombra y
-          // esquinas redondeadas, y aquí no hay sombras.
-          className: 'type-mono',
-          style: {
-            background: 'var(--color-surface)',
-            color: 'var(--color-fg)',
-            border: '1px solid var(--color-line)',
-            borderRadius: '2px',
-            boxShadow: 'none',
-          },
-        }}
-      />
-
       <Button variant="agent" type="button" onClick={() => setAbierto(true)}>
         Recalcular volumen
       </Button>
