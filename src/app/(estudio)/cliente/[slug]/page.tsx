@@ -115,7 +115,12 @@ export default async function ClientePage({ params, searchParams }: Props) {
 
   return (
     <>
-      <HeaderCliente cliente={cliente} mes={mes} redes={semaforos} />
+      <HeaderCliente
+        cliente={cliente}
+        mes={mes}
+        redes={semaforos}
+        resumen={<SeccionResumen cliente={cliente} mes={mes} piezas={piezas} stories={stories} />}
+      />
 
       <div className="flex min-w-0 flex-1 gap-8 px-6 py-8">
         <NavSecciones />
