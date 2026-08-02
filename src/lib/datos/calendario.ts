@@ -3,7 +3,7 @@ import 'server-only'
 import type { EntradaCalendario } from '@/components/calendario/rejilla-mes'
 import { PIECE_FORMAT_LABEL, STORY_KIND_LABEL } from '@/domain/labels'
 import { createClient } from '@/lib/supabase/server'
-import type { MonthKey } from '@/lib/time'
+import { addMonths, type MonthKey } from '@/lib/time'
 
 /**
  * Las entradas del calendario, ya normalizadas para la rejilla.
@@ -25,9 +25,14 @@ export async function entradasDelMes({
 }: FiltroCalendario): Promise<EntradaCalendario[]> {
   const supabase = await createClient()
 
+  // Un mes en due_date no es una columna como en pieces/stories: se acota por
+  // rango de fechas, `[inicioMes, finMes)`.
+  const inicioMes = `${mes}-01`
+  const finMes = `${addMonths(mes, 1)}-01`
+
   // Los colores salen de los pilares en la vista de un cliente y de la marca
   // en la global. Se traen los dos y decide el llamador cuál usar.
-  const [clientesRes, pilaresRes, piezasRes, storiesRes] = await Promise.all([
+  const [clientesRes, pilaresRes, piezasRes, storiesRes, tareasRes] = await Promise.all([
     supabase.from('clients').select('id, slug, name, brand_color').is('archived_at', null),
     supabase.from('pillars').select('id, color'),
     (() => {
@@ -45,9 +50,18 @@ export async function entradasDelMes({
         .eq('month', mes)
       return clientId ? q.eq('client_id', clientId) : q
     })(),
+    (() => {
+      const q = supabase
+        .from('tasks')
+        .select('id, client_id, title, due_date')
+        .gte('due_date', inicioMes)
+        .lt('due_date', finMes)
+      return clientId ? q.eq('client_id', clientId) : q
+    })(),
   ])
 
-  const primerError = clientesRes.error ?? pilaresRes.error ?? piezasRes.error ?? storiesRes.error
+  const primerError =
+    clientesRes.error ?? pilaresRes.error ?? piezasRes.error ?? storiesRes.error ?? tareasRes.error
   if (primerError) {
     throw new Error(`No se pudo leer el calendario: ${primerError.message}`)
   }
@@ -88,6 +102,20 @@ export async function entradasDelMes({
       fecha: s.scheduled_on,
       titulo: STORY_KIND_LABEL[s.kind],
       tipo: 'story',
+      color: global ? (cliente.brand_color ?? 'var(--color-fg-muted)') : 'var(--color-fg-muted)',
+      ...(global ? { etiqueta: cliente.name } : {}),
+    })
+  }
+
+  for (const t of tareasRes.data ?? []) {
+    const cliente = clientes.get(t.client_id)
+    if (!cliente || !t.due_date) continue
+
+    entradas.push({
+      id: t.id,
+      fecha: t.due_date,
+      titulo: t.title,
+      tipo: 'tarea',
       color: global ? (cliente.brand_color ?? 'var(--color-fg-muted)') : 'var(--color-fg-muted)',
       ...(global ? { etiqueta: cliente.name } : {}),
     })

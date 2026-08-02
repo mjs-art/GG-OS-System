@@ -595,7 +595,12 @@ export function PlannerCliente({
           <Mono className="text-fg-muted mb-3 block">
             Las fechas se cambian arrastrando en el grid. Aquí el mes se lee, no se mueve.
           </Mono>
-          <RejillaMes mes={mes} hoy={hoy} entradas={entradas} />
+          <RejillaMes
+            mes={mes}
+            hoy={hoy}
+            entradas={entradas}
+            clientesParaTarea={[{ id: cliente.id, name: cliente.name }]}
+          />
         </>
       )}
 
