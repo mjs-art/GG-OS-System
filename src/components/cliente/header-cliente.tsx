@@ -1,5 +1,7 @@
 import Link from 'next/link'
-import { Button, Chip, Display, Mono } from '@/components/ui/primitives'
+import type { ReactNode } from 'react'
+import { BotonPresentarMes } from '@/components/cliente/boton-presentar-mes'
+import { Chip, Display, Mono } from '@/components/ui/primitives'
 import type { Cliente } from '@/lib/datos/clientes'
 import { addMonths, formatMonthKey, type MonthKey } from '@/lib/time'
 
@@ -14,10 +16,12 @@ export function HeaderCliente({
   cliente,
   mes,
   redes,
+  resumen,
 }: {
   cliente: Cliente
   mes: MonthKey
   redes: Array<{ platform: string; estado: 'ok' | 'warn' | 'bad' }>
+  resumen: ReactNode
 }) {
   const anterior = addMonths(mes, -1)
   const siguiente = addMonths(mes, 1)
@@ -82,7 +86,7 @@ export function HeaderCliente({
 
           {/* Importar es una operación de mudanza: se hace una vez por cliente
               y luego estorba. Por eso va como enlace discreto y no como botón
-              compitiendo con los dos que sí se usan cada semana. */}
+              compitiendo con el que sí se usa cada semana. */}
           <Link
             href={`/cliente/${cliente.slug}/importar`}
             className="type-mono text-fg-muted hover:text-fg px-2 py-2"
@@ -90,8 +94,7 @@ export function HeaderCliente({
             Importar de Notion
           </Link>
 
-          <Button variant="secondary">Modo cliente</Button>
-          <Button variant="primary">Presentar mes</Button>
+          <BotonPresentarMes mesLabel={formatMonthKey(mes)}>{resumen}</BotonPresentarMes>
         </div>
       </div>
     </header>
