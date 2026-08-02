@@ -283,9 +283,10 @@ export function VistaTabla({
                         es el atraso que se persigue. */}
                     <td className="px-3 py-2 align-middle">
                       <Mono
-                        className={
-                          f.entregaEstado === 'atrasada' ? 'text-accent-hot' : 'text-fg-muted'
-                        }
+                        className={cn(
+                          'whitespace-nowrap',
+                          f.entregaEstado === 'atrasada' ? 'text-accent-hot' : 'text-fg-muted',
+                        )}
                         title={ENTREGA_LABEL[f.entregaEstado]}
                       >
                         {f.entrega

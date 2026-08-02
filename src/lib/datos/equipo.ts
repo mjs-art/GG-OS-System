@@ -33,9 +33,16 @@ export interface MiembroDelEstudio {
   esTu: boolean
 }
 
-/** La etiqueta de alguien de quien solo conocemos el identificador. */
+/**
+ * La etiqueta de alguien de quien solo conocemos el identificador.
+ *
+ * Se toma la COLA del uuid y no la cabeza: los identificadores que se generan
+ * por lote —los del seed, y los de cualquier alta masiva— comparten el prefijo,
+ * y `Miembro 11111111` sale idéntico para las quince personas del estudio. Los
+ * últimos ocho caracteres sí distinguen.
+ */
 export function nombreProvisional(userId: string): string {
-  return `Miembro ${userId.slice(0, 8)}`
+  return `Miembro ${userId.slice(-8)}`
 }
 
 export async function listarEquipo(orgId: string): Promise<MiembroDelEstudio[]> {
