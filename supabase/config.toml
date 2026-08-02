@@ -160,7 +160,22 @@ site_url = "http://127.0.0.1:3000"
 # The public URL that Auth serves on. Defaults to the API external URL with `/auth/v1` appended.
 # external_url = ""
 # A list of *exact* URLs that auth providers are permitted to redirect to post authentication.
-additional_redirect_urls = ["https://127.0.0.1:3000"]
+#
+# OJO CON ESTO, es la trampa que ya nos costó una sesión de depuración.
+#
+# Si el `emailRedirectTo` que manda la app NO está aquí, GoTrue **no falla**:
+# ignora en silencio la URL pedida y redirige al `site_url` de arriba. El
+# síntoma es que el magic link te deja en la raíz con un `?code=` colgando, el
+# callback nunca corre, y parece que el login está roto sin que nada dé error.
+#
+# El default de la CLI venía con `https://` en local, que no existe.
+#
+# En PRODUCCIÓN esto no se configura aquí: va en el panel de Supabase, en
+# Authentication → URL Configuration, y hay que meter el dominio de Vercel.
+additional_redirect_urls = [
+  "http://127.0.0.1:3000/**",
+  "http://localhost:3000/**",
+]
 # How long tokens are valid for, in seconds. Defaults to 3600 (1 hour), maximum 604,800 (1 week).
 jwt_expiry = 3600
 # JWT issuer URL. If not set, defaults to auth.external_url.

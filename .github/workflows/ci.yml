@@ -103,11 +103,37 @@ jobs:
       # Emular móvil sobre Chromium daría confianza falsa justo en la
       # superficie que más importa.
       - run: pnpm exec playwright install --with-deps chromium webkit
+
+      # Supabase de verdad, no llaves de relleno.
+      #
+      # Las pruebas de login entran con un magic link real: llenan el
+      # formulario, sacan el correo de Mailpit y abren esa liga. Ese es el
+      # punto — la versión anterior de este job pasaba llaves inventadas y
+      # pasaba en verde porque ninguna prueba usaba sesión todavía. En cuanto
+      # el login se volvió real, quedó al descubierto que aquí nunca hubo base.
+      #
+      # Mailpit (inbucket) es obligatorio: sin él no hay de dónde sacar la liga.
+      - name: Levantar Supabase
+        run: pnpm exec supabase start --exclude studio,realtime,storage-api,imgproxy,edge-runtime,logflare,vector
+      - name: Migraciones y datos ficticios
+        run: pnpm exec supabase db reset
+
+      - name: Exportar las llaves locales al entorno
+        run: |
+          pnpm exec supabase status -o json > /tmp/sb.json
+          {
+            echo "NEXT_PUBLIC_SUPABASE_URL=$(jq -r .API_URL /tmp/sb.json)"
+            echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=$(jq -r .ANON_KEY /tmp/sb.json)"
+            echo "SUPABASE_SERVICE_ROLE_KEY=$(jq -r .SERVICE_ROLE_KEY /tmp/sb.json)"
+          } >> "$GITHUB_ENV"
+
       - run: pnpm test:e2e
         env:
-          # e2e runs against the mock data layer; no real credentials in CI.
-          NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:54321
-          NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-placeholder-anon-key
+          # Tiene que coincidir con el host de Playwright. `localhost` y
+          # `127.0.0.1` son orígenes distintos para las cookies, y la sesión se
+          # escribiría en uno para leerse en el otro.
+          NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3000
+          CLIENT_PORTAL_TOKEN_SECRET: solo-para-ci-no-sirve-en-ningun-otro-lado
       - uses: actions/upload-artifact@v4
         if: failure()
         with:

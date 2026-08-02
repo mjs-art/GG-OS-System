@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next'
 import { IBM_Plex_Mono, Instrument_Serif } from 'next/font/google'
 import { HydrationMarker } from '@/components/hydration-marker'
+import { Avisos } from '@/components/ui/avisos'
 import { colorSchemeDe, themeColorDe } from '@/domain/tema'
 import { leerTema } from '@/lib/tema'
 import './globals.css'
@@ -79,6 +80,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
       <body className="bg-bg text-fg flex min-h-full flex-col">
         {children}
         <HydrationMarker />
+        <Avisos />
       </body>
     </html>
   )
