@@ -94,6 +94,7 @@ export interface PlanDeImportacion {
   meses: MonthKey[]
   columnasIgnoradas: string[]
   ok: boolean
+  diagnostico: DiagnosticoImportacion
 }
 
 /* ========================================================================== */
@@ -253,6 +254,14 @@ interface Lectura {
   columnasIgnoradas: string[]
   errores: ErrorDeImportacion[]
   avisos: Aviso[]
+  diagnostico: DiagnosticoImportacion
+}
+
+/** Información cruda de lo que el parser detectó. Útil para diagnosticar por qué falla. */
+export interface DiagnosticoImportacion {
+  separador: string
+  encabezadosCrudos: string[]
+  primerasFilas: string[][]
 }
 
 /* ========================================================================== */
@@ -513,6 +522,12 @@ function leerCsv(texto: string): Lectura {
   const errores: ErrorDeImportacion[] = []
   const tabla = partirCsv(texto)
 
+  const diagnostico: DiagnosticoImportacion = {
+    separador: tabla.separador === '\t' ? 'tabulador' : `"${tabla.separador}"`,
+    encabezadosCrudos: tabla.encabezados,
+    primerasFilas: tabla.filas.slice(0, 3).map((f) => f.celdas),
+  }
+
   if (tabla.encabezados.length === 0 || tabla.filas.length === 0) {
     errores.push({
       linea: null,
@@ -528,6 +543,7 @@ function leerCsv(texto: string): Lectura {
       columnasIgnoradas: [],
       errores,
       avisos: [],
+      diagnostico,
     }
   }
 
@@ -582,6 +598,7 @@ function leerCsv(texto: string): Lectura {
     columnasIgnoradas: tabla.encabezados.filter((h, i) => h !== '' && !usadas.has(i)),
     errores,
     avisos: [],
+    diagnostico,
   }
 }
 
@@ -645,6 +662,7 @@ function leerJson(texto: string): Lectura {
         },
       ],
       avisos: [],
+      diagnostico: { separador: '', encabezadosCrudos: [], primerasFilas: [] },
     }
   }
 
@@ -670,6 +688,7 @@ function leerJson(texto: string): Lectura {
         },
       ],
       avisos: [],
+      diagnostico: { separador: '', encabezadosCrudos: [], primerasFilas: [] },
     }
   }
 
@@ -716,7 +735,15 @@ function leerJson(texto: string): Lectura {
     })
   }
 
-  return { origen: 'json', filas, presentes, columnasIgnoradas: [...ignoradas], errores, avisos }
+  return {
+    origen: 'json',
+    filas,
+    presentes,
+    columnasIgnoradas: [...ignoradas],
+    errores,
+    avisos,
+    diagnostico: { separador: '', encabezadosCrudos: [], primerasFilas: [] },
+  }
 }
 
 /* ========================================================================== */
@@ -750,6 +777,7 @@ export function construirPlanDeImportacion(texto: string): PlanDeImportacion {
     sprints: [],
     meses: [],
     columnasIgnoradas: lectura.columnasIgnoradas,
+    diagnostico: lectura.diagnostico,
     ok: false,
   })
 
@@ -1045,8 +1073,7 @@ export function construirPlanDeImportacion(texto: string): PlanDeImportacion {
     sprints,
     meses: meses.filter(isMonthKey),
     columnasIgnoradas: lectura.columnasIgnoradas,
-    // Todo o nada: un solo renglón malo detiene el archivo completo. Un mes a
-    // medias se ve normal y nadie descubre que faltaban ocho piezas.
+    diagnostico: lectura.diagnostico,
     ok: errores.length === 0 && conSlot.length + stories.length > 0,
   }
 }

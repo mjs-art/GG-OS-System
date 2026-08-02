@@ -28,6 +28,56 @@ export function VistaPrevia({
 
   return (
     <div className="flex flex-col gap-8">
+      {/* --- Diagnóstico: qué vio el parser ---------------------------------- */}
+      {plan.errores.length > 0 && plan.diagnostico.encabezadosCrudos.length > 0 && (
+        <Bloque
+          titulo="Lo que el parser detectó"
+          nota={`Separador: ${plan.diagnostico.separador}. ${plan.diagnostico.encabezadosCrudos.length} ${plan.diagnostico.encabezadosCrudos.length === 1 ? 'columna en el encabezado' : 'columnas en el encabezado'}. Si esto no se ve bien, el separador no es el correcto.`}
+          color="var(--color-fg-muted)"
+        >
+          <div className="flex flex-col gap-3">
+            <div>
+              <Mono className="text-fg-muted mb-1 block">Encabezados detectados:</Mono>
+              <div className="border-line bg-bg rounded-xs border p-3 text-[12px]">
+                {plan.diagnostico.encabezadosCrudos.map((h, i) => (
+                  <span key={i}>
+                    {i > 0 && <span className="text-fg-muted mx-1">|</span>}
+                    <span className="type-mono text-fg">{h || '(vacío)'}</span>
+                  </span>
+                ))}
+              </div>
+            </div>
+            {plan.diagnostico.primerasFilas.length > 0 && (
+              <div>
+                <Mono className="text-fg-muted mb-1 block">Primeros renglones:</Mono>
+                <div className="border-line bg-bg rounded-xs border p-3">
+                  {plan.diagnostico.primerasFilas.map((fila, i) => (
+                    <div
+                      key={i}
+                      className="type-mono border-line py-1.5 text-[12px] first:pt-0 last:border-b-0 last:pb-0"
+                      style={{
+                        borderBottom:
+                          i < plan.diagnostico.primerasFilas.length - 1
+                            ? '1px solid var(--color-line)'
+                            : 'none',
+                      }}
+                    >
+                      R{i + 1}:{' '}
+                      {fila.map((celda, j) => (
+                        <span key={j}>
+                          {j > 0 && <span className="text-fg-muted mx-1">|</span>}
+                          <span className="text-fg">{celda || '(vacío)'}</span>
+                        </span>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </Bloque>
+      )}
+
       {/* --- Lo que NO se puede importar ---------------------------------- */}
       {plan.errores.length > 0 && (
         <Bloque
