@@ -62,12 +62,13 @@ src/
   lib/
     env.ts             ÚNICO lugar que lee process.env
     time.ts            ÚNICO lugar que crea Date
+    tema.ts            lee la cookie del tema; las reglas están en domain/tema.ts
     supabase/          clientes server / browser / admin
 supabase/
   migrations/          versionadas, se aplican en orden, nunca se editan una vez aplicadas
   tests/database/      pruebas de RLS en pgTAP
   seed.sql             datos FICTICIOS de desarrollo
-docs/                  arquitectura, seguridad, agentes, plan de ejecución
+docs/                  arquitectura, seguridad, diseño, agentes, plan de ejecución
 ```
 
 ---
