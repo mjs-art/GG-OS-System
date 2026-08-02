@@ -15,28 +15,22 @@ function safeDestination(value: string | null): string {
 }
 
 /**
- * Redirect con `Location` RELATIVO, a propósito.
+ * La respuesta se construye a partir del request para que los cookies que
+ * `exchangeCodeForSession` escribió viajen en el redirect. Un
+ * `new NextResponse(null, ...)` crea una respuesta vacía y los cookies de
+ * sesión no llegan al navegador — el proxy no encuentra al usuario y lo manda
+ * de vuelta a /entrar.
  *
- * Esto costó una sesión de depuración y vale la pena dejarlo escrito.
- *
- * Ni `request.nextUrl.origin` ni `request.url` sirven aquí: los dos reflejan
- * la idea que el servidor tiene de sí mismo, no el host por el que de verdad
- * entró la petición. Con `next start` resolvían a `localhost:3000` mientras el
- * navegador venía de `127.0.0.1:3000`.
- *
- * El síntoma era de los peores. El intercambio del código funcionaba, la
- * cookie de sesión se escribía bien... en `127.0.0.1`. Y acto seguido el
- * redirect mandaba al usuario a `localhost`, que para el navegador es OTRO
- * origen y por lo tanto otro frasco de cookies. Sesión creada, usuario
- * deslogueado, cero errores en consola. Detrás de un proxy —Vercel— es el
- * mismo riesgo con otro nombre.
- *
- * Un `Location` relativo lo resuelve el navegador contra el origen en el que
- * YA está. Cruzar de origen deja de ser posible en vez de depender de que el
- * servidor adivine bien su propio nombre.
+ * En producción el `Location` se genera con el dominio real que Vercel pone
+ * en el header `Host`. El caso `localhost` vs `127.0.0.1` que mordió en dev
+ * local se maneja en el proxy, que ya está escrito para ese escenario.
  */
-function redirigirA(path: string): NextResponse {
-  return new NextResponse(null, { status: 303, headers: { Location: path } })
+function redirigirA(request: NextRequest, path: string): NextResponse {
+  const url = request.nextUrl.clone()
+  const index = path.indexOf('?')
+  url.pathname = index === -1 ? path : path.slice(0, index)
+  url.search = index === -1 ? '' : path.slice(index)
+  return NextResponse.redirect(url, 303)
 }
 
 export async function GET(request: NextRequest) {
@@ -44,7 +38,7 @@ export async function GET(request: NextRequest) {
   const destino = safeDestination(request.nextUrl.searchParams.get('destino'))
 
   if (!code) {
-    return redirigirA('/entrar?error=link_invalido')
+    return redirigirA(request, '/entrar?error=link_invalido')
   }
 
   const supabase = await createClient()
@@ -53,8 +47,8 @@ export async function GET(request: NextRequest) {
   if (error) {
     // Un link caducado o ya usado. El mensaje no distingue entre los dos:
     // ninguno de los dos casos le sirve a quien no debería estar aquí.
-    return redirigirA('/entrar?error=link_invalido')
+    return redirigirA(request, '/entrar?error=link_invalido')
   }
 
-  return redirigirA(destino)
+  return redirigirA(request, destino)
 }
