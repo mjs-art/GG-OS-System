@@ -61,7 +61,12 @@ export function SeccionCalendario({
           body="Las piezas aparecen aquí en cuanto tengan fecha de publicación. Asígnalas arrastrándolas en el planner."
         />
       ) : (
-        <RejillaMes mes={mes} hoy={hoy} entradas={entradas} />
+        <RejillaMes
+          mes={mes}
+          hoy={hoy}
+          entradas={entradas}
+          clientesParaTarea={[{ id: cliente.id, name: cliente.name }]}
+        />
       )}
     </>
   )

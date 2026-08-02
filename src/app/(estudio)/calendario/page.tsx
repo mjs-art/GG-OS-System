@@ -95,7 +95,16 @@ export default async function CalendarioPage({
           body="Cuando las piezas tengan fecha de publicación van a aparecer aquí. Asígnalas desde el planner de cada cliente."
         />
       ) : (
-        <RejillaMes mes={mes} hoy={hoy} entradas={entradas} />
+        <RejillaMes
+          mes={mes}
+          hoy={hoy}
+          entradas={entradas}
+          clientesParaTarea={
+            seleccionado
+              ? [{ id: seleccionado.id, name: seleccionado.name }]
+              : clientes.map((c) => ({ id: c.id, name: c.name }))
+          }
+        />
       )}
     </main>
   )
