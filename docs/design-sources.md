@@ -16,7 +16,7 @@ Esa prueba **se verificó que falla de verdad**: se le metió un `bg-gray-800 sh
 
 Lo que sí puede ser color literal en runtime: el de cada pilar y el de marca del cliente. Vienen de la base como dato, entran por `style`, y no son decisiones de diseño.
 
-Lo que **no** llegó todavía: la licencia web de Meno Banner. La dirección tipográfica que Ana mandó junto con los colores está pendiente por eso; el detalle está en `design.md`.
+La dirección tipográfica que Ana mandó junto con los colores también está aplicada, con una sustitución: **Meno Banner** se sirve desde Adobe Fonts y hoy el estudio no paga Creative Cloud, así que va **Instrument Serif** (OFL) en su lugar. Se eligió comparando ocho candidatas contra el specimen; el porqué de cada descarte está en `design.md`. El día que haya Adobe, migrar es cambiar `layout.tsx`.
 
 ### El preview de las variantes
 

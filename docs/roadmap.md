@@ -55,7 +55,7 @@ La sección más grande de la app y donde ocurre el trabajo diario. Merece la ma
 **Construye**
 
 - **Grid** — 3 columnas (toggle a 5), tiles cuadrados sin gap, orden descendente por fecha, solo feed. Franja del color del pilar, ícono de formato, candado, punto de procedencia. Toggle **Content Map**. Barra de balance de pilares.
-- **Riel de fechas** — el elemento firma. Columna a la derecha alineada fila por fila; una hairline conecta cada tile con su fecha. **Al arrastrar, esa línea se pinta en rojo quemado y se redibuja hacia la fecha nueva.** Que se sienta que cambió la fecha, no que se movió una imagen.
+- **Riel de fechas** — el elemento firma. Columna a la derecha alineada fila por fila; una hairline conecta cada tile con su fecha. **Al arrastrar, esa línea se pinta en `--color-accent-hot` y se redibuja hacia la fecha nueva.** Que se sienta que cambió la fecha, no que se movió una imagen.
 - **Drag & drop en dos modos**: intercambiar (default) e insertar y correr. Sobre una pieza con candado: el tile tiembla, nada se mueve, y el toast dice la fecha exacta a la que está amarrada.
 - **Calendario**, **Tabla** con edición inline y export CSV, **Stories** por día
 - **Drawer de detalle** de 520px con todos los campos de copy, contador de hashtags que se pone rojo al romper la regla, y chip de procedencia por campo
@@ -164,7 +164,7 @@ El entregable que reemplaza la presentación mensual y el que más tiempo devuel
 **Construye**
 
 - `/aprobar/:token` → correo → magic link contra la lista blanca
-- Paleta invertida: fondo `#F7F5F2`, acento **el color de marca del cliente**, no el rojo quemado
+- Tema claro **fijo**: el árbol del portal va envuelto en `<div data-tema="claro">` y no sigue la cookie del estudio. El selector del CSS está escrito sin `html` adelante justo para permitir esta anidación, y hay una prueba que lo protege — ver `docs/design.md`. El acento es **el color de marca del cliente**, no el de Ana.
 - Portada, plan del mes, grid, cada pieza con copy completo y **Aprobar** / **Pedir cambio**, resultados del mes anterior, pauta en versión simple, próximas fechas
 - Contador fijo "8 de 20 aprobadas". **Descargar PDF** con estilos de impresión reales.
 

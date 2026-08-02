@@ -49,4 +49,6 @@ La lista completa está en `CLAUDE.md`.
 
 Etapa 0 terminada: cimientos, sistema de diseño, esquema multi-tenant con RLS probado, contratos de agentes y red de seguridad en CI. La etapa 1 está descrita en `docs/roadmap.md`.
 
+La identidad de Ana Gz Studio ya está aplicada: sus cuatro colores oficiales, tema claro y oscuro con switch por cookie, y su dirección tipográfica. Ver `docs/design.md`.
+
 Los agentes corren contra un proveedor **mock**. No hay ni una llamada de red a un LLM todavía.
