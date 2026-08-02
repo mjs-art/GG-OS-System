@@ -77,6 +77,14 @@ const serverSchema = z.object({
    */
   META_ADS_TOKEN: z.string().optional(),
   META_ADS_ACCOUNT_ID: z.string().optional(),
+
+  /**
+   * Token de Apify. Sin verificación de Meta: los Actores de Apify ya tienen
+   * la integración con Instagram, TikTok y Facebook hecha. Solo se consume
+   * el resultado del scrape, no se llama a las APIs de Meta directamente.
+   * https://console.apify.com/settings/integrations
+   */
+  APIFY_API_TOKEN: z.string().optional(),
 })
 
 let cachedServerEnv: z.infer<typeof serverSchema> | null = null

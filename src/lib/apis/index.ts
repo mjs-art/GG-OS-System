@@ -6,6 +6,8 @@ export {
   obtenerInstagramBusinessId,
 } from './instagram'
 export { crearClienteMetaAds, normalizarAdAccountId } from './meta-ads'
+export { crearClienteApify, ACTORES } from './apify'
+export type { RunInput, RunResult } from './apify'
 export type {
   CuentaConectada,
   DatosFrescosDeRed,
