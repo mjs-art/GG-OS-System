@@ -4,7 +4,7 @@ import { ArrowDown, ArrowUp, Download } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { Button, Chip, EmptyState, Mono } from '@/components/ui/primitives'
 import { partesDeFecha, SIN_FECHA } from '@/components/planner/fechas'
-import type { Pieza, Pilar } from '@/components/planner/tipos'
+import type { MiembroDelEstudio, Pieza, Pilar, SprintPlanner } from '@/components/planner/tipos'
 import { ESTADOS } from '@/components/planner/tipos'
 import {
   PIECE_FORMAT_LABEL,
@@ -17,7 +17,10 @@ import {
 } from '@/domain/labels'
 import {
   aCsv,
+  diasDeAtraso,
+  ENTREGA_LABEL,
   esDelPipeline,
+  estadoDeEntrega,
   ordenarFilas,
   type ColumnaTabla,
   type Direccion,
@@ -33,12 +36,17 @@ import { cn } from '@/lib/cn'
  * la propia celda.
  */
 
-const COLUMNAS: readonly { id: ColumnaTabla; label: string; ancho?: string }[] = [
+const COLUMNAS: readonly { id: ColumnaTabla; label: string }[] = [
   { id: 'fecha', label: 'Fecha' },
+  // Entrega va pegada a Fecha: la comparación entre las dos es la lectura que
+  // se hace todos los lunes, y con seis columnas de por medio no se hace.
+  { id: 'entrega', label: 'Entrega' },
   { id: 'formato', label: 'Formato' },
   { id: 'pilar', label: 'Pilar' },
   { id: 'hook', label: 'Hook' },
   { id: 'estado', label: 'Estado' },
+  { id: 'responsable', label: 'Responsable' },
+  { id: 'sprint', label: 'Sprint' },
   { id: 'plataformas', label: 'Plataformas' },
   { id: 'procedencia', label: 'Procedencia' },
   { id: 'aprobacion', label: 'Aprobación' },
@@ -62,6 +70,9 @@ function procedenciaDe(pieza: Pieza): string {
 export function VistaTabla({
   piezas,
   pilares,
+  equipo,
+  sprints,
+  hoy,
   nombreArchivo,
   onEditarHook,
   onEditarEstado,
@@ -69,6 +80,10 @@ export function VistaTabla({
 }: {
   piezas: readonly Pieza[]
   pilares: readonly Pilar[]
+  equipo: readonly MiembroDelEstudio[]
+  sprints: readonly SprintPlanner[]
+  /** `2026-09-14` en la zona del estudio. Inyectado: aquí no se lee el reloj. */
+  hoy: string
   nombreArchivo: string
   onEditarHook: (pieceId: string, hook: string) => void
   onEditarEstado: (pieceId: string, estado: PieceStatus) => void
@@ -80,9 +95,12 @@ export function VistaTabla({
   const [filtroFormato, setFiltroFormato] = useState<string | null>(null)
   const [filtroEstado, setFiltroEstado] = useState<PieceStatus | null>(null)
   const [soloEditadas, setSoloEditadas] = useState(false)
+  const [soloAtrasadas, setSoloAtrasadas] = useState(false)
   const [editando, setEditando] = useState<string | null>(null)
 
   const porPilar = useMemo(() => new Map(pilares.map((p) => [p.id, p] as const)), [pilares])
+  const porMiembro = useMemo(() => new Map(equipo.map((m) => [m.userId, m] as const)), [equipo])
+  const porSprint = useMemo(() => new Map(sprints.map((s) => [s.id, s] as const)), [sprints])
 
   /** Color por pieza, para no buscar el pilar por nombre al pintar cada renglón. */
   const colorDe = useMemo(
@@ -102,26 +120,31 @@ export function VistaTabla({
         if (filtroFormato && p.format !== filtroFormato) return false
         if (filtroEstado && p.status !== filtroEstado) return false
         if (soloEditadas && esDelPipeline(p)) return false
+        if (soloAtrasadas && estadoDeEntrega(p, hoy) !== 'atrasada') return false
         return true
       }),
-    [piezas, filtroPilar, filtroFormato, filtroEstado, soloEditadas],
+    [piezas, filtroPilar, filtroFormato, filtroEstado, soloEditadas, soloAtrasadas, hoy],
   )
 
   const filas = useMemo(() => {
     const crudas = visibles.map((p) => ({
       id: p.id,
       fecha: p.publishAt,
+      entrega: p.dueDate,
+      entregaEstado: estadoDeEntrega(p, hoy),
       formato: p.format,
       pilar: (p.pillarId ? porPilar.get(p.pillarId)?.name : null) ?? 'Sin pilar',
       hook: p.hook ?? '',
       estado: p.status,
       ordenEstado: PIECE_STATUS_ORDER.indexOf(p.status),
+      responsable: (p.assigneeId ? porMiembro.get(p.assigneeId)?.nombre : null) ?? null,
+      sprint: (p.sprintId ? porSprint.get(p.sprintId)?.name : null) ?? null,
       plataformas: p.platforms,
       procedencia: procedenciaDe(p),
       aprobacion: aprobacionDe(p.status),
     }))
     return ordenarFilas(crudas, columna, direccion)
-  }, [visibles, porPilar, columna, direccion])
+  }, [visibles, porPilar, porMiembro, porSprint, hoy, columna, direccion])
 
   function ordenarPor(id: ColumnaTabla) {
     if (id === columna) setDireccion(direccion === 'asc' ? 'desc' : 'asc')
@@ -136,10 +159,13 @@ export function VistaTabla({
       COLUMNAS.map((c) => c.label),
       filas.map((f) => [
         f.fecha ? (partesDeFecha(f.fecha)?.iso ?? '') : '',
+        f.entrega ?? '',
         PIECE_FORMAT_LABEL[f.formato],
         f.pilar,
         f.hook,
         PIECE_STATUS_LABEL[f.estado],
+        f.responsable ?? '',
+        f.sprint ?? '',
         f.plataformas.map((p) => PLATFORM_LABEL[p as keyof typeof PLATFORM_LABEL] ?? p).join(' · '),
         f.procedencia,
         f.aprobacion,
@@ -166,12 +192,17 @@ export function VistaTabla({
   return (
     <>
       <div className="mb-4 flex flex-wrap items-center gap-2">
-        {chip(!filtroPilar && !filtroFormato && !filtroEstado && !soloEditadas, 'Todo', () => {
-          setFiltroPilar(null)
-          setFiltroFormato(null)
-          setFiltroEstado(null)
-          setSoloEditadas(false)
-        })}
+        {chip(
+          !filtroPilar && !filtroFormato && !filtroEstado && !soloEditadas && !soloAtrasadas,
+          'Todo',
+          () => {
+            setFiltroPilar(null)
+            setFiltroFormato(null)
+            setFiltroEstado(null)
+            setSoloEditadas(false)
+            setSoloAtrasadas(false)
+          },
+        )}
         {pilares.map((p) =>
           chip(filtroPilar === p.id, p.name, () =>
             setFiltroPilar(filtroPilar === p.id ? null : p.id),
@@ -188,6 +219,7 @@ export function VistaTabla({
           ),
         )}
         {chip(soloEditadas, 'Editado por ti', () => setSoloEditadas(!soloEditadas))}
+        {chip(soloAtrasadas, 'Entrega vencida', () => setSoloAtrasadas(!soloAtrasadas))}
 
         <Button variant="secondary" className="ml-auto" onClick={exportar}>
           <Download aria-hidden className="size-3.5" />
@@ -247,6 +279,22 @@ export function VistaTabla({
                         {partes ? `${partes.dia} ${partes.diaSemana} ${partes.hora}` : SIN_FECHA}
                       </button>
                     </td>
+                    {/* La entrega vencida es lo único que se pinta en caliente:
+                        es el atraso que se persigue. */}
+                    <td className="px-3 py-2 align-middle">
+                      <Mono
+                        className={
+                          f.entregaEstado === 'atrasada' ? 'text-accent-hot' : 'text-fg-muted'
+                        }
+                        title={ENTREGA_LABEL[f.entregaEstado]}
+                      >
+                        {f.entrega
+                          ? f.entregaEstado === 'atrasada'
+                            ? `${f.entrega} · ${diasDeAtraso(f.entrega, hoy)} d`
+                            : f.entrega
+                          : '—'}
+                      </Mono>
+                    </td>
                     <td className="px-3 py-2 align-middle">
                       <Mono className="text-fg-muted">{PIECE_FORMAT_LABEL[f.formato]}</Mono>
                     </td>
@@ -303,6 +351,15 @@ export function VistaTabla({
                           </option>
                         ))}
                       </select>
+                    </td>
+
+                    <td className="px-3 py-2 align-middle">
+                      <span className="text-[13px]">
+                        {f.responsable ?? <span className="text-fg-muted">Sin asignar</span>}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2 align-middle">
+                      <Mono className="text-fg-muted">{f.sprint ?? '—'}</Mono>
                     </td>
 
                     <td className="px-3 py-2 align-middle">

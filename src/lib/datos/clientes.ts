@@ -163,10 +163,23 @@ export interface Pieza {
   cta: string | null
   hashtags: string[]
   assetStatus: 'pendiente' | 'recibido'
+  /**
+   * Ruta en el bucket `piezas` con diagonal inicial (`/{client}/{pieza}/{archivo}`)
+   * si es subida, o la URL completa si es un enlace externo. Es privada: para
+   * mostrarla hace falta firmarla en el servidor. Ver `urlsDeAssets`.
+   */
+  assetUrl: string | null
+  assetSource: AssetSource | null
+  /** `AAAA-MM-DD`. La fecha de ENTREGA, que no es la de publicación. */
+  dueDate: string | null
+  assigneeId: string | null
+  sprintId: string | null
   boosted: boolean
   /** Qué agente escribió cada campo. Vacío = lo escribió una persona. */
   authoredBy: Record<string, string>
 }
+
+export type AssetSource = 'subido' | 'enlace'
 
 export async function listarPiezas(clientId: string, mes: MonthKey): Promise<Pieza[]> {
   const supabase = await createClient()
@@ -198,6 +211,14 @@ export async function listarPiezas(clientId: string, mes: MonthKey): Promise<Pie
     cta: p.cta,
     hashtags: p.hashtags ?? [],
     assetStatus: p.asset_status,
+    // El CHECK de la base ya garantiza que `asset_source` solo puede ser uno de
+    // los dos valores, y que va acompañado de `asset_url` o no va. El generador
+    // de tipos la ve como `text` porque es un CHECK y no un enum.
+    assetUrl: p.asset_url,
+    assetSource: p.asset_source as AssetSource | null,
+    dueDate: p.due_date,
+    assigneeId: p.assignee_id,
+    sprintId: p.sprint_id,
     boosted: p.boosted,
     authoredBy: (p.authored_by ?? {}) as Record<string, string>,
   }))

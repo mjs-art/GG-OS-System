@@ -46,6 +46,22 @@ description = "Meta / Facebook Graph API access token"
 regex = '''EAA[A-Za-z0-9]{60,}'''
 tags = ["meta"]
 
+  # Un PNG de 1×1 en base64 dentro de una prueba empieza con `EAAAABCAYAAAA…`
+  # y dispara esta regla. Pasó de verdad y bloqueó un commit legítimo.
+  #
+  # La salida fácil habría sido aflojar la regla de Meta. No: una regla de
+  # secretos que grita con fixtures es una regla que alguien termina
+  # desactivando, y entonces deja de proteger de lo que sí importa.
+  #
+  # `IHDR` es la primera sección de TODO archivo PNG y en base64 aparece como
+  # `SUhEUg` o, desalineado, como el `CAYAAAA` de aquí. Ningún token de Meta
+  # lleva la cabecera de un PNG adentro, así que el patrón distingue sin
+  # abrirle la puerta a nada.
+  [rules.allowlist]
+  description = "Imágenes PNG en base64 dentro de las pruebas"
+  regexTarget = "match"
+  regexes = ['''EAA[A-Za-z0-9+/]*(CAYAAAA|SUhEUg|IVBORw0KGgo)''']
+
 [[rules]]
 id = "postgres-connection-string"
 description = "Postgres connection string with an inline password"
