@@ -114,7 +114,12 @@ jobs:
       #
       # Mailpit (inbucket) es obligatorio: sin él no hay de dónde sacar la liga.
       - name: Levantar Supabase
-        run: pnpm exec supabase start --exclude studio,realtime,storage-api,imgproxy,edge-runtime,logflare,vector
+        # storage-api NO se excluye aquí, a diferencia del job de base.
+        # Las pruebas de imágenes suben archivos de verdad al bucket; sin
+        # Storage la subida falla y el tile se queda vacío, con un error que
+        # parece de la app. imgproxy sí se queda fuera: solo hace
+        # transformaciones y no usamos ninguna.
+        run: pnpm exec supabase start --exclude studio,realtime,imgproxy,edge-runtime,logflare,vector
       - name: Migraciones y datos ficticios
         run: pnpm exec supabase db reset
 

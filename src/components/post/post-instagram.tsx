@@ -1,7 +1,6 @@
 import { Bookmark, Heart, Images, MessageCircle, Music, Play, Send } from 'lucide-react'
 import Image from 'next/image'
 import { Mono } from '@/components/ui/primitives'
-import { imagenDePieza } from '@/components/planner/imagenes'
 import { PIECE_FORMAT_LABEL, type PieceFormat } from '@/domain/labels'
 import { cn } from '@/lib/cn'
 
@@ -14,13 +13,18 @@ import { cn } from '@/lib/cn'
  * que se ve bien en el tema oscuro del estudio y en el claro fijo del portal
  * sin una sola condición de tema.
  *
+ * `imageUrl` YA viene resuelta: es una URL firmada del bucket privado `piezas`
+ * o un enlace externo (Canva/Drive), y si es null se cae a la placa del pilar,
+ * igual que el tile del grid. La imagen va `unoptimized` porque una URL firmada
+ * cambia en cada render (el optimizador nunca acertaría su caché) y un enlace
+ * externo vive en un dominio que no está en `remotePatterns`.
+ *
  * Lo que NO hace, a propósito: inventar métricas. La captura de referencia
  * mostraba "100 me gusta", pero un número de likes fabricado en la vista del
  * cliente se lee como una promesa, no como un mockup. El chrome de Instagram
  * —los íconos de corazón, comentario, compartir y guardar— ya comunica "así se
- * va a ver"; los likes reales llegan por la sección de Resultados, con su CSV
- * atrás. Los reels muestran "Audio original", que es la etiqueta real por
- * defecto de Instagram, no un título de canción inventado.
+ * va a ver". Los reels muestran "Audio original", la etiqueta real por defecto
+ * de Instagram, no un título de canción inventado.
  */
 
 const ICONO_FORMATO = { post: null, carrusel: Images, reel: Play } as const
@@ -31,10 +35,10 @@ export interface PostInstagramProps {
   bio: string | null
   /** El acento de la cuenta: fondo del monograma cuando no hay avatar. */
   brandColor: string | null
-  /** URL firmada de la imagen, o null → cae al placeholder por semilla. */
+  /** URL firmada o enlace externo ya resuelto; null → placa de color. */
   imageUrl: string | null
-  /** La semilla del placeholder cuando no hay imagen real (el id de la pieza). */
-  fallbackSeed: string
+  /** Color de la placa cuando no hay imagen (pilar o marca). */
+  fallbackColor?: string | null
   format: PieceFormat
   /** El caption ya armado con `componerCaption`. */
   caption: string
@@ -51,7 +55,7 @@ export function PostInstagram({
   bio,
   brandColor,
   imageUrl,
-  fallbackSeed,
+  fallbackColor,
   format,
   caption,
   fecha,
@@ -60,7 +64,6 @@ export function PostInstagram({
 }: PostInstagramProps) {
   const usuario = handle ?? 'tu_cuenta'
   const IconoFormato = ICONO_FORMATO[format]
-  const src = imageUrl ?? imagenDePieza(fallbackSeed)
 
   return (
     <div
@@ -81,15 +84,27 @@ export function PostInstagram({
         </div>
       </div>
 
-      {/* Imagen cuadrada con la seña del formato */}
+      {/* Imagen cuadrada con la seña del formato, o la placa del pilar. */}
       <div className="bg-surface-2 relative aspect-square w-full">
-        <Image
-          src={src}
-          alt=""
-          fill
-          sizes="(max-width: 640px) 100vw, 384px"
-          className="object-cover"
-        />
+        {imageUrl ? (
+          <Image
+            src={imageUrl}
+            alt=""
+            fill
+            sizes="(max-width: 640px) 100vw, 384px"
+            unoptimized
+            className="object-cover"
+          />
+        ) : (
+          <div
+            className="flex h-full w-full items-center justify-center p-3"
+            style={{ backgroundColor: fallbackColor ?? brandColor ?? 'var(--color-surface-2)' }}
+          >
+            <Mono className="text-on-accent text-center leading-tight text-balance">
+              {PIECE_FORMAT_LABEL[format]}
+            </Mono>
+          </div>
+        )}
 
         {/* Reel: badge de play. Carrusel: pila de imágenes. Post: nada. */}
         {IconoFormato && (

@@ -117,13 +117,12 @@ enabled = true
 # The maximum file size allowed (e.g. "5MB", "500KB").
 file_size_limit = "50MiB"
 
-# Bucket privado de imágenes de piezas. Privado a propósito: las fotos se sirven
-# por URL firmada desde el servidor, nunca por path adivinable (ver la migración
-# 0011). El límite y los MIME espejan la validación Zod del Server Action de subida.
-[storage.buckets.images]
-public = false
-file_size_limit = "10MiB"
-allowed_mime_types = ["image/png", "image/jpeg", "image/webp"]
+# Uncomment to configure local storage buckets
+# [storage.buckets.images]
+# public = false
+# file_size_limit = "50MiB"
+# allowed_mime_types = ["image/png", "image/jpeg"]
+# objects_path = "./images"
 
 # Allow connections via S3 compatible clients
 [storage.s3_protocol]

@@ -1,24 +1,28 @@
 'use client'
 
-import { ImagePlus, Lock, LockOpen } from 'lucide-react'
-import { useRef, useState, useTransition, type ReactNode } from 'react'
-import { toast } from 'sonner'
+import { Lock, LockOpen } from 'lucide-react'
+import { useState, type ReactNode } from 'react'
 import { Button, Chip, Mono } from '@/components/ui/primitives'
-import { PostInstagram } from '@/components/post/post-instagram'
-import { subirImagenPieza } from '@/components/planner/acciones'
+import { CampoAsset } from '@/components/planner/campo-asset'
+import { CampoSprint } from '@/components/planner/campo-sprint'
 import { Interruptor, LabelCampo, SegmentedControl } from '@/components/planner/controles'
 import { Drawer } from '@/components/planner/drawer'
+import { PostInstagram } from '@/components/post/post-instagram'
 import {
   ACCIONES_DE_AGENTE,
   ESTADOS,
   FORMATOS,
   PLATAFORMAS,
   type CampoConProcedencia,
-  type Cliente,
+  type MiembroDelEstudio,
   type Pieza,
+  type Pilar,
+  type SprintPlanner,
 } from '@/components/planner/tipos'
 import { checkCodeRules, type CodeRule } from '@/domain/brand-rules'
 import { componerCaption } from '@/domain/post-preview'
+import { diasDeAtraso, ENTREGA_LABEL, estadoDeEntrega } from '@/domain/planner'
+import { formatDate } from '@/lib/time'
 import {
   AGENT_LABEL,
   PIECE_FORMAT_LABEL,
@@ -29,7 +33,6 @@ import {
   type PieceStatus,
   type Platform,
 } from '@/domain/labels'
-import { formatDate } from '@/lib/time'
 
 /**
  * § Planner · Detalle de pieza.
@@ -51,17 +54,45 @@ export interface CambioDePieza {
   dateLocked?: boolean
 }
 
+/** Todo lo que el drawer necesita para la imagen, el sprint y el responsable. */
+export interface ContextoDePieza {
+  equipo: readonly MiembroDelEstudio[]
+  sprints: readonly SprintPlanner[]
+  /** `2026-09-14` en la zona del estudio. Aquí no se lee el reloj. */
+  hoy: string
+  /** URL firmada de la imagen de la pieza abierta, si tiene. */
+  urlAsset: string | null
+  /** Identidad pública de la cuenta, para el preview "Ver como post". */
+  cuenta: {
+    handle: string | null
+    avatarUrl: string | null
+    bio: string | null
+    brandColor: string | null
+  }
+  subiendoAsset: boolean
+  creandoSprint: boolean
+  onSubirAsset: (pieceId: string, archivo: File) => void
+  onEnlazarAsset: (pieceId: string, url: string) => void
+  onQuitarAsset: (pieceId: string) => void
+  onCrearSprint: (
+    pieceId: string,
+    sprint: { name: string; startsOn: string; endsOn: string },
+  ) => void
+}
+
 export function DrawerPieza({
   pieza,
-  cliente,
+  pilares,
   reglas,
+  contexto,
   onCerrar,
   onGuardar,
   onAccionDeAgente,
 }: {
   pieza: Pieza | undefined
-  cliente: Cliente
+  pilares: readonly Pilar[]
   reglas: readonly CodeRule[]
+  contexto: ContextoDePieza
   onCerrar: () => void
   onGuardar: (pieceId: string, cambio: CambioDePieza) => void
   onAccionDeAgente: (accion: (typeof ACCIONES_DE_AGENTE)[number]) => void
@@ -98,8 +129,9 @@ export function DrawerPieza({
         <CuerpoDrawer
           key={pieza.id}
           pieza={pieza}
-          cliente={cliente}
+          pilares={pilares}
           reglas={reglas}
+          contexto={contexto}
           onGuardar={onGuardar}
         />
       )}
@@ -109,23 +141,24 @@ export function DrawerPieza({
 
 function CuerpoDrawer({
   pieza,
-  cliente,
+  pilares,
   reglas,
+  contexto,
   onGuardar,
 }: {
   pieza: Pieza
-  cliente: Cliente
+  pilares: readonly Pilar[]
   reglas: readonly CodeRule[]
+  contexto: ContextoDePieza
   onGuardar: (pieceId: string, cambio: CambioDePieza) => void
 }) {
-  const pilares = cliente.pilares
   const [editados, setEditados] = useState<ReadonlySet<string>>(new Set())
   const [hashtags, setHashtags] = useState(pieza.hashtags.join(' '))
   // El toggle Editar | Ver como post NO remonta el cuerpo: alterna con `hidden`
   // para que el texto sin guardar de los campos no se pierda al cambiar de modo.
-  // Es la clase de falso bug que ya mordió ("los tiles desaparecían al cambiar
-  // de modo"): un cambio de vista no debe tirar estado del DOM.
   const [modo, setModo] = useState<'editar' | 'post'>('editar')
+
+  const entrega = estadoDeEntrega(pieza, contexto.hoy)
 
   const guardar = (cambio: CambioDePieza) => {
     setEditados((previos) => new Set(previos).add(cambio.campo))
@@ -197,7 +230,25 @@ function CuerpoDrawer({
         ]}
       />
 
-      {modo === 'post' && <VistaComoPost pieza={pieza} cliente={cliente} />}
+      {modo === 'post' && (
+        <PostInstagram
+          handle={contexto.cuenta.handle}
+          avatarUrl={contexto.cuenta.avatarUrl}
+          bio={contexto.cuenta.bio}
+          brandColor={contexto.cuenta.brandColor}
+          imageUrl={contexto.urlAsset}
+          fallbackColor={pilares.find((p) => p.id === pieza.pillarId)?.color ?? null}
+          format={pieza.format}
+          caption={componerCaption({
+            hook: pieza.hook,
+            copyIn: pieza.copyIn,
+            copyOut: pieza.copyOut,
+            cta: pieza.cta,
+            hashtags: pieza.hashtags,
+          })}
+          fecha={pieza.publishAt ? formatDate(new Date(pieza.publishAt)) : null}
+        />
+      )}
 
       {/* El formulario se oculta con `hidden`, no se desmonta: así el texto sin
           guardar de un campo no se pierde al asomarse al preview y volver. */}
@@ -304,6 +355,72 @@ function CuerpoDrawer({
           </p>
         </section>
 
+        {/*
+        La entrega va JUNTO a la publicación y no en la logística de hasta
+        abajo: son dos fechas del mismo compromiso y separarlas es lo que hace
+        que alguien mueva una y se olvide de la otra.
+      */}
+        <section>
+          <LabelCampo
+            htmlFor={`entrega-${pieza.id}`}
+            extra={
+              entrega === 'atrasada' || entrega === 'hoy' ? (
+                <Chip tone="accent">
+                  {entrega === 'hoy'
+                    ? ENTREGA_LABEL.hoy
+                    : `Vencida hace ${diasDeAtraso(pieza.dueDate ?? contexto.hoy, contexto.hoy)} d`}
+                </Chip>
+              ) : null
+            }
+          >
+            Fecha de entrega
+          </LabelCampo>
+          <input
+            id={`entrega-${pieza.id}`}
+            type="date"
+            defaultValue={pieza.dueDate ?? ''}
+            onBlur={(e) => {
+              const nuevo = e.target.value || null
+              if (nuevo !== pieza.dueDate) guardar({ campo: 'due_date', valor: nuevo })
+            }}
+            className="border-line bg-bg text-fg w-full rounded-xs border px-3 py-2 text-[13px]"
+          />
+          <p className="text-fg-muted mt-1.5 text-[12px]">
+            Cuándo tiene que estar el material listo. No es la fecha de publicación: publicar es el
+            resultado, entregar es el compromiso.
+          </p>
+        </section>
+
+        <section>
+          <LabelCampo htmlFor={`responsable-${pieza.id}`}>Responsable</LabelCampo>
+          <select
+            id={`responsable-${pieza.id}`}
+            value={pieza.assigneeId ?? ''}
+            onChange={(e) => guardar({ campo: 'assignee_id', valor: e.target.value || null })}
+            className="border-line bg-bg text-fg w-full rounded-xs border px-3 py-2 text-[13px]"
+          >
+            <option value="">Sin responsable</option>
+            {contexto.equipo.map((m) => (
+              <option key={m.userId} value={m.userId}>
+                {m.esTu ? `${m.nombre} (tú)` : m.nombre}
+              </option>
+            ))}
+          </select>
+          <p className="text-fg-muted mt-1.5 text-[12px]">
+            Solo gente del estudio. La base lo verifica: asignarle una pieza a alguien de fuera es
+            imposible, no nada más está mal visto.
+          </p>
+        </section>
+
+        <CampoSprint
+          pieceId={pieza.id}
+          sprintId={pieza.sprintId}
+          sprints={contexto.sprints}
+          creando={contexto.creandoSprint}
+          onElegir={(sprintId) => guardar({ campo: 'sprint_id', valor: sprintId })}
+          onCrear={(sprint) => contexto.onCrearSprint(pieza.id, sprint)}
+        />
+
         <section>
           <LabelCampo htmlFor={`estado-${pieza.id}`}>Estado</LabelCampo>
           <select
@@ -362,8 +479,23 @@ function CuerpoDrawer({
         </section>
 
         {/* --- Logística ----------------------------------------------------- */}
+        <CampoAsset
+          pieza={pieza}
+          url={contexto.urlAsset}
+          subiendo={contexto.subiendoAsset}
+          onSubir={(archivo) => contexto.onSubirAsset(pieza.id, archivo)}
+          onEnlazar={(url) => contexto.onEnlazarAsset(pieza.id, url)}
+          onQuitar={() => contexto.onQuitarAsset(pieza.id)}
+        />
+
+        {/*
+        El estado del asset se sigue pudiendo mover a mano, pero ya no es la
+        única verdad: en cuanto hay imagen, guardarla lo pone en `recibido`. Se
+        deja el control porque "recibido" también cubre el material que llegó
+        por WhatsApp y todavía no se sube.
+      */}
         <section>
-          <LabelCampo>Asset</LabelCampo>
+          <LabelCampo>Estado del material</LabelCampo>
           <SegmentedControl
             etiqueta="Estado del asset"
             valor={pieza.assetStatus}
@@ -373,9 +505,6 @@ function CuerpoDrawer({
               { id: 'recibido', label: 'Recibido' },
             ]}
           />
-          <p className="text-fg-muted mt-1.5 text-[12px]">
-            Solo el estado. Los archivos viven en la carpeta del cliente, no aquí.
-          </p>
         </section>
 
         <section>
@@ -391,79 +520,6 @@ function CuerpoDrawer({
             presupuesto. Aquí solo se marca que la pieza va a llevar dinero atrás.
           </p>
         </section>
-      </div>
-    </div>
-  )
-}
-
-/**
- * El preview de la pieza como publicación de Instagram, más el control para
- * subir su foto.
- *
- * La subida vive aquí y no en el formulario de edición a propósito: la imagen es
- * lo primero que uno quiere ver junto al mockup, y el resultado se comprueba en
- * el mismo cuadro. El Server Action revalida la ruta, así que al terminar la
- * página llega con la imagen ya firmada y el preview se actualiza solo.
- */
-function VistaComoPost({ pieza, cliente }: { pieza: Pieza; cliente: Cliente }) {
-  const [subiendo, empezarSubida] = useTransition()
-  const inputRef = useRef<HTMLInputElement>(null)
-
-  const caption = componerCaption({
-    hook: pieza.hook,
-    copyIn: pieza.copyIn,
-    copyOut: pieza.copyOut,
-    cta: pieza.cta,
-    hashtags: pieza.hashtags,
-  })
-
-  const alElegirArchivo = (archivo: File) => {
-    const datos = new FormData()
-    datos.set('slug', cliente.slug)
-    datos.set('clientId', cliente.id)
-    datos.set('pieceId', pieza.id)
-    datos.set('file', archivo)
-
-    empezarSubida(async () => {
-      const r = await subirImagenPieza(datos)
-      if (r.ok) toast.success('Imagen actualizada.')
-      else toast.error('No se pudo subir la imagen.', { description: r.mensaje })
-      if (inputRef.current) inputRef.current.value = ''
-    })
-  }
-
-  return (
-    <div className="flex flex-col gap-4">
-      <PostInstagram
-        handle={cliente.handle}
-        avatarUrl={cliente.avatarUrl}
-        bio={cliente.bio}
-        brandColor={cliente.brandColor}
-        imageUrl={pieza.imageUrl}
-        fallbackSeed={pieza.id}
-        format={pieza.format}
-        caption={caption}
-        fecha={pieza.publishAt ? formatDate(new Date(pieza.publishAt)) : null}
-      />
-
-      <div className="flex flex-col gap-2">
-        <input
-          ref={inputRef}
-          type="file"
-          accept="image/jpeg,image/png,image/webp"
-          className="sr-only"
-          onChange={(e) => {
-            const archivo = e.target.files?.[0]
-            if (archivo) alElegirArchivo(archivo)
-          }}
-        />
-        <Button variant="secondary" onClick={() => inputRef.current?.click()} disabled={subiendo}>
-          <ImagePlus aria-hidden className="size-4" />
-          {subiendo ? 'Subiendo…' : pieza.imageUrl ? 'Reemplazar imagen' : 'Subir imagen'}
-        </Button>
-        <p className="text-fg-muted text-[12px]">
-          JPG, PNG o WebP, hasta 10 MB. Se ve así en el grid y en lo que revisa el cliente.
-        </p>
       </div>
     </div>
   )

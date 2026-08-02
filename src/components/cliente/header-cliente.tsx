@@ -80,6 +80,16 @@ export function HeaderCliente({
             </Link>
           </div>
 
+          {/* Importar es una operación de mudanza: se hace una vez por cliente
+              y luego estorba. Por eso va como enlace discreto y no como botón
+              compitiendo con los dos que sí se usan cada semana. */}
+          <Link
+            href={`/cliente/${cliente.slug}/importar`}
+            className="type-mono text-fg-muted hover:text-fg px-2 py-2"
+          >
+            Importar de Notion
+          </Link>
+
           <Button variant="secondary">Modo cliente</Button>
           <Button variant="primary">Presentar mes</Button>
         </div>

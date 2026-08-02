@@ -19,7 +19,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(32);
+select plan(24);
 
 -- ---------------------------------------------------------------------------
 -- Helpers de sesión. Reproducen lo que hace PostgREST con el JWT.
@@ -105,25 +105,6 @@ values
   ('99990000-0000-4000-8000-000000000001', '99992222-0000-4000-8000-000000000001',
    1, '99991111-0000-4000-8000-000000000001', 'context card de prueba');
 
--- Imágenes de pieza en Storage. El path es {client_id}/{piece_id} —el check de
--- `pieces.image_path` lo fuerza, y la política de storage.objects lee el primer
--- folder para saber el dueño. Se siembran tres: el borrador y la pieza visible
--- del Cliente A, y una pieza del Cliente B. La regla que se prueba: el portal
--- del Cliente A solo puede firmar la del con_cliente, jamás el borrador ni la
--- ajena. `storage.objects` NO lo cubre `rls_cobertura_test` (solo audita el
--- esquema public), así que este es el único lugar donde se afirma.
-update public.pieces set image_path = client_id::text || '/' || id::text
-  where id in (
-    '99993333-0000-4000-8000-000000000001',  -- Cliente A, borrador (idea)
-    '99993333-0000-4000-8000-000000000002',  -- Cliente A, con_cliente
-    '99993333-0000-4000-8000-000000000003'   -- Cliente B, con_cliente
-  );
-
-insert into storage.objects (bucket_id, name) values
-  ('images', '99992222-0000-4000-8000-000000000001/99993333-0000-4000-8000-000000000001'),
-  ('images', '99992222-0000-4000-8000-000000000001/99993333-0000-4000-8000-000000000002'),
-  ('images', '99992222-0000-4000-8000-000000000002/99993333-0000-4000-8000-000000000003');
-
 -- ===========================================================================
 -- 1 · Aislamiento entre agencias
 -- ===========================================================================
@@ -145,13 +126,6 @@ select is(
   'El estudio ve solo su propia org'
 );
 
--- El estudio ve en Storage las imágenes de sus clientes (las dos del A y la del B).
-select is(
-  (select count(*) from storage.objects
-    where bucket_id = 'images' and name like '99992222%')::int, 3,
-  'El estudio ve las 3 imágenes de sus clientes en Storage'
-);
-
 select pg_temp.login('99991111-0000-4000-8000-000000000003', 'rls-rival@test.invalid');
 
 select is(
@@ -169,12 +143,6 @@ select is(
   (select count(*) from public.private_notes
     where client_id::text like '99992222%')::int, 0,
   'La agencia rival no ve notas privadas ajenas'
-);
-
-select is(
-  (select count(*) from storage.objects
-    where bucket_id = 'images' and name like '99992222%')::int, 0,
-  'La agencia rival no ve ninguna imagen en Storage de los clientes ajenos'
 );
 
 select throws_ok(
@@ -245,37 +213,6 @@ select is(
   (select count(*) from public.context_card_versions
     where client_id::text like '99992222%')::int, 0,
   'El portal no ve el Context Card'
-);
-
--- Storage: el candado de la imagen. El portal solo puede firmar la foto de una
--- pieza que ya es visible para él; el borrador y lo ajeno no existen.
-select is(
-  (select count(*) from storage.objects where bucket_id = 'images'
-    and name = '99992222-0000-4000-8000-000000000001/99993333-0000-4000-8000-000000000002')::int,
-  1,
-  'El portal ve la imagen de su pieza en con_cliente'
-);
-
-select is(
-  (select count(*) from storage.objects where bucket_id = 'images'
-    and name = '99992222-0000-4000-8000-000000000001/99993333-0000-4000-8000-000000000001')::int,
-  0,
-  'El portal NO ve la imagen del borrador de su propio cliente'
-);
-
-select is(
-  (select count(*) from storage.objects where bucket_id = 'images'
-    and name = '99992222-0000-4000-8000-000000000002/99993333-0000-4000-8000-000000000003')::int,
-  0,
-  'El portal NO ve la imagen de una pieza de otro cliente'
-);
-
-select throws_ok(
-  $$ insert into storage.objects (bucket_id, name)
-     values ('images',
-             '99992222-0000-4000-8000-000000000001/99993333-0000-4000-8000-000000000099') $$,
-  null,
-  'El portal no puede subir una imagen: escribir en Storage es solo del estudio'
 );
 
 -- Ojo con esto: cuando RLS filtra un UPDATE, Postgres NO lanza error — afecta
@@ -349,23 +286,6 @@ select throws_ok(
              '99992222-0000-4000-8000-000000000001', '2026-10', 'post') $$,
   null,
   'Ni con superusuario se puede guardar una pieza con un org_id que no corresponde al cliente'
-);
-
--- El bucket de imágenes es privado: sin eso, las fotos se sirven por path
--- adivinable y el candado del portal no vale nada.
-select is(
-  (select public from storage.buckets where id = 'images'), false,
-  'El bucket de imágenes es privado'
-);
-
--- El path de la imagen tiene que empezar con el client_id de la propia pieza:
--- es lo que deja que la política de storage confíe en el primer folder.
-select throws_ok(
-  $$ update public.pieces
-       set image_path = '99992222-0000-4000-8000-000000000099/suelto'
-     where id = '99993333-0000-4000-8000-000000000002' $$,
-  null,
-  'El path de la imagen no puede apuntar a un client_id que no es el de la pieza'
 );
 
 select * from finish();

@@ -1,6 +1,7 @@
 import { PostInstagram } from '@/components/post/post-instagram'
 import { componerCaption } from '@/domain/post-preview'
-import { firmarImagenes } from '@/lib/datos/clientes'
+import type { AssetSource } from '@/lib/datos/clientes'
+import { urlsDeAssets } from '@/lib/datos/planner'
 import { createClient } from '@/lib/supabase/server'
 import { formatDate, formatMonthKey, type MonthKey } from '@/lib/time'
 import { AccionesPieza } from './acciones-pieza'
@@ -40,7 +41,9 @@ export async function VistaPortal({
   const [{ data: piezas }, { data: aprobaciones }] = await Promise.all([
     supabase
       .from('pieces')
-      .select('id, format, publish_at, hook, copy_in, copy_out, cta, hashtags, status, image_path')
+      .select(
+        'id, format, publish_at, hook, copy_in, copy_out, cta, hashtags, status, asset_url, asset_source',
+      )
       .eq('client_id', clientId)
       .eq('month', mes)
       .order('publish_at', { nullsFirst: false }),
@@ -48,11 +51,15 @@ export async function VistaPortal({
   ])
 
   const lista = piezas ?? []
-  // Firma en lote las imágenes de las piezas que ya tienen asset. RLS ya recortó
-  // la lista a lo client-visible, así que aquí no se firma jamás un borrador.
-  const firmadas = await firmarImagenes(
-    supabase,
-    lista.map((p) => p.image_path).filter((v): v is string => v !== null),
+  // Firma en lote las imágenes de las piezas que ya tienen asset (los enlaces
+  // externos pasan tal cual). RLS ya recortó la lista a lo client-visible, así
+  // que aquí no se firma jamás un borrador. Misma función que el planner.
+  const urls = await urlsDeAssets(
+    lista.map((p) => ({
+      id: p.id,
+      assetUrl: p.asset_url,
+      assetSource: p.asset_source as AssetSource | null,
+    })),
   )
   const decidida = new Set((aprobaciones ?? []).map((a) => a.piece_id))
   const aprobadas = (aprobaciones ?? []).filter((a) => a.decision === 'aprobado').length
@@ -100,8 +107,7 @@ export async function VistaPortal({
                   avatarUrl={avatarUrl}
                   bio={bio}
                   brandColor={brandColor}
-                  imageUrl={p.image_path ? (firmadas.get(p.image_path) ?? null) : null}
-                  fallbackSeed={p.id}
+                  imageUrl={urls[p.id] ?? null}
                   format={p.format}
                   caption={caption}
                   fecha={p.publish_at ? formatDate(new Date(p.publish_at)) : null}

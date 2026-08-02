@@ -23,9 +23,9 @@ import { BarraPilares } from '@/components/planner/barra-pilares'
 import { Interruptor, sacudir, SegmentedControl } from '@/components/planner/controles'
 import { partesDeFecha, SIN_FECHA } from '@/components/planner/fechas'
 import { TileFantasma, TilePieza } from '@/components/planner/tile-pieza'
-import type { Pieza, Pilar } from '@/components/planner/tipos'
+import type { Pieza, Pilar, UrlsDeAssets } from '@/components/planner/tipos'
 import { PIECE_FORMAT_LABEL } from '@/domain/labels'
-import type { ModoArrastre, SegmentoPilar } from '@/domain/planner'
+import { estadoDeEntrega, type ModoArrastre, type SegmentoPilar } from '@/domain/planner'
 import { cn } from '@/lib/cn'
 
 /**
@@ -78,6 +78,8 @@ export interface ResultadoSoltar {
 
 export function VistaGrid({
   piezas,
+  urlsAssets,
+  hoy,
   pilares,
   segmentos,
   columnas,
@@ -91,6 +93,10 @@ export function VistaGrid({
 }: {
   /** Ya vienen ordenadas para el grid: descendente por fecha. */
   piezas: readonly Pieza[]
+  /** URLs firmadas por el servidor, por id de pieza. */
+  urlsAssets: UrlsDeAssets
+  /** `2026-09-14` en la zona del estudio. Inyectado: aquí no se lee el reloj. */
+  hoy: string
   pilares: readonly Pilar[]
   segmentos: readonly SegmentoPilar[]
   columnas: number
@@ -257,6 +263,8 @@ export function VistaGrid({
                   <TilePieza
                     key={pieza.id}
                     pieza={pieza}
+                    urlAsset={urlsAssets[pieza.id] ?? null}
+                    entrega={estadoDeEntrega(pieza, hoy)}
                     colorPilar={pilar?.color ?? null}
                     nombrePilar={pilar?.name ?? 'Sin pilar'}
                     contentMap={contentMap}
@@ -377,6 +385,7 @@ export function VistaGrid({
             <div style={{ width: lado || undefined }}>
               <TileFantasma
                 pieza={activa}
+                urlAsset={urlsAssets[activa.id] ?? null}
                 colorPilar={(activa.pillarId ? porPilar.get(activa.pillarId)?.color : null) ?? null}
                 nombrePilar={
                   (activa.pillarId ? porPilar.get(activa.pillarId)?.name : null) ?? 'Sin pilar'

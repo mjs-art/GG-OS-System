@@ -59,6 +59,21 @@ const envInyectado =
  */
 const servedOverTls = siteUrl.startsWith('https://')
 
+/**
+ * El stack local de Supabase, para `connect-src` e `img-src`.
+ *
+ * Va atado a `servedOverTls` y NO a `isDev`, y eso ya mordió: `next start`
+ * corre en producción, así que con `isDev` el permiso desaparecía justo en las
+ * pruebas de extremo a extremo. El síntoma fue de los buenos — subir la imagen
+ * de una pieza se quedaba pegada en la vista previa local, sin error visible,
+ * porque el navegador bloqueaba el PUT al bucket y la app solo veía "falló la
+ * red". Si nos sirven por http, el Supabase de al lado también es local.
+ *
+ * En un despliegue de verdad esto no aparece y Supabase entra por
+ * `https://*.supabase.co`.
+ */
+const supabaseLocal = servedOverTls ? '' : ' http://127.0.0.1:54321'
+
 const securityHeaders = [
   { key: 'X-Content-Type-Options', value: 'nosniff' },
   { key: 'X-Frame-Options', value: 'DENY' },
@@ -82,12 +97,29 @@ const securityHeaders = [
         : "script-src 'self' 'unsafe-inline'",
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "font-src 'self' https://fonts.gstatic.com data:",
-      // En dev, las URLs firmadas de Storage salen del Supabase local
-      // (127.0.0.1:54321); en prod van por *.supabase.co, ya cubierto.
-      "img-src 'self' data: blob: https://images.unsplash.com https://*.supabase.co" +
-        (isDev ? ' http://127.0.0.1:54321' : ''),
-      "connect-src 'self' https://*.supabase.co wss://*.supabase.co" +
-        (isDev ? ' http://127.0.0.1:54321 ws://127.0.0.1:54321' : ''),
+      /*
+       * Las imágenes de las piezas vienen de dos lados y ninguno se puede
+       * enumerar de antemano:
+       *
+       *   · las subidas se sirven con URL FIRMADA desde Supabase Storage —
+       *     `https://*.supabase.co` en producción, pero `http://127.0.0.1:54321`
+       *     en local, que es lo que rompía el grid en desarrollo;
+       *   · los enlaces son de Canva, Drive, Dropbox o de donde el diseñador
+       *     los tenga. No hay lista blanca posible.
+       *
+       * `blob:` es la vista previa local mientras un archivo se sube.
+       *
+       * El costo de abrir `https:` está medido: un `img-src` amplio es un canal
+       * de exfiltración SI hubiera XSS. Aquí `script-src` sigue cerrado, no hay
+       * `dangerouslySetInnerHTML` (ESLint lo prohíbe) y el copy de los agentes
+       * entra como texto. La alternativa era no mostrar los enlaces externos, y
+       * eso es la mitad de la función.
+       */
+      `img-src 'self' data: blob: https:${supabaseLocal}`,
+      // El PUT del archivo al bucket sale del NAVEGADOR (ver `campo-asset.tsx`),
+      // así que Storage tiene que estar aquí y no solo del lado del servidor.
+      `connect-src 'self' https://*.supabase.co wss://*.supabase.co${supabaseLocal}` +
+        (servedOverTls ? '' : ' ws://127.0.0.1:54321'),
       "frame-ancestors 'none'",
       "form-action 'self'",
       "base-uri 'self'",
@@ -117,13 +149,15 @@ const nextConfig: NextConfig = {
   // (Next 16 no longer runs ESLint during `next build`).
   typescript: { ignoreBuildErrors: false },
 
+  /*
+   * Las imágenes de las piezas van con `unoptimized` (ver `tile-pieza.tsx`):
+   * una URL firmada trae firma nueva en cada render, así que el optimizador
+   * nunca acertaría su caché, y un enlace externo vive en un dominio que no
+   * conocemos. `remotePatterns` se queda para lo que sí pase por el
+   * optimizador algún día.
+   */
   images: {
-    remotePatterns: [
-      { protocol: 'https', hostname: 'images.unsplash.com' },
-      { protocol: 'https', hostname: '*.supabase.co' },
-      // Storage local en dev: las URLs firmadas apuntan a 127.0.0.1:54321.
-      ...(isDev ? [{ protocol: 'http' as const, hostname: '127.0.0.1', port: '54321' }] : []),
-    ],
+    remotePatterns: [{ protocol: 'https', hostname: '*.supabase.co' }],
   },
 
   async headers() {

@@ -168,38 +168,23 @@ export interface Pieza {
   cta: string | null
   hashtags: string[]
   assetStatus: 'pendiente' | 'recibido'
-  boosted: boolean
   /**
-   * URL FIRMADA de la imagen de la pieza, o `null` si no tiene asset todavía.
-   * El bucket es privado, así que la firma se genera aquí en el servidor; el
-   * cliente jamás ve el path ni puede firmar. `null` → el grid cae al placeholder.
+   * Ruta en el bucket `piezas` con diagonal inicial (`/{client}/{pieza}/{archivo}`)
+   * si es subida, o la URL completa si es un enlace externo. Es privada: para
+   * mostrarla hace falta firmarla en el servidor. Ver `urlsDeAssets`.
    */
-  imageUrl: string | null
+  assetUrl: string | null
+  assetSource: AssetSource | null
+  /** `AAAA-MM-DD`. La fecha de ENTREGA, que no es la de publicación. */
+  dueDate: string | null
+  assigneeId: string | null
+  sprintId: string | null
+  boosted: boolean
   /** Qué agente escribió cada campo. Vacío = lo escribió una persona. */
   authoredBy: Record<string, string>
 }
 
-/**
- * Firma en lote los paths de Storage y regresa un mapa path → URL firmada.
- *
- * Se firma en batch (una llamada, no una por pieza) y se tolera el objeto que
- * no existe: `createSignedUrls` reporta el error por-item, y ahí devolvemos
- * `null` para que la superficie caiga al placeholder en vez de romperse. La
- * hora de expiry es holgada para no re-firmar en cada render.
- */
-export async function firmarImagenes(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  paths: readonly string[],
-): Promise<Map<string, string>> {
-  const firmadas = new Map<string, string>()
-  if (paths.length === 0) return firmadas
-
-  const { data } = await supabase.storage.from('images').createSignedUrls([...paths], 60 * 60)
-  for (const item of data ?? []) {
-    if (item.signedUrl && item.path && !item.error) firmadas.set(item.path, item.signedUrl)
-  }
-  return firmadas
-}
+export type AssetSource = 'subido' | 'enlace'
 
 export async function listarPiezas(clientId: string, mes: MonthKey): Promise<Pieza[]> {
   const supabase = await createClient()
@@ -213,11 +198,7 @@ export async function listarPiezas(clientId: string, mes: MonthKey): Promise<Pie
 
   if (error) throw new Error(`No se pudieron leer las piezas: ${error.message}`)
 
-  const filas = data ?? []
-  const paths = filas.map((p) => p.image_path).filter((v): v is string => v !== null)
-  const firmadas = await firmarImagenes(supabase, paths)
-
-  return filas.map((p) => ({
+  return (data ?? []).map((p) => ({
     id: p.id,
     pillarId: p.pillar_id,
     month: p.month as MonthKey,
@@ -235,8 +216,15 @@ export async function listarPiezas(clientId: string, mes: MonthKey): Promise<Pie
     cta: p.cta,
     hashtags: p.hashtags ?? [],
     assetStatus: p.asset_status,
+    // El CHECK de la base ya garantiza que `asset_source` solo puede ser uno de
+    // los dos valores, y que va acompañado de `asset_url` o no va. El generador
+    // de tipos la ve como `text` porque es un CHECK y no un enum.
+    assetUrl: p.asset_url,
+    assetSource: p.asset_source as AssetSource | null,
+    dueDate: p.due_date,
+    assigneeId: p.assignee_id,
+    sprintId: p.sprint_id,
     boosted: p.boosted,
-    imageUrl: p.image_path ? (firmadas.get(p.image_path) ?? null) : null,
     authoredBy: (p.authored_by ?? {}) as Record<string, string>,
   }))
 }
