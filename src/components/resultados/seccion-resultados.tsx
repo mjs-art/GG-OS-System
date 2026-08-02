@@ -5,33 +5,18 @@ import { LecturaDelMes } from '@/components/resultados/lectura-del-mes'
 import { PiezasDestacadas } from '@/components/resultados/piezas-destacadas'
 import { OrigenDeLosNumeros, RejillaMetricas } from '@/components/resultados/rejilla-metricas'
 import { TablasRendimiento } from '@/components/resultados/tablas-rendimiento'
-import { Display, Divider, EmptyState, Mono } from '@/components/ui/primitives'
+import { Display, Divider, Mono } from '@/components/ui/primitives'
 import type { Cliente } from '@/lib/datos/clientes'
 import { datosDeResultados } from '@/lib/datos/resultados'
 import { addMonths, formatMonthKey, type MonthKey } from '@/lib/time'
 
-/**
- * § Resultados.
- *
- * Tiene **selector de mes propio**, separado del header. No es un capricho de
- * diseño: el planner se trabaja con un mes de adelanto y los resultados que se
- * leen son los del mes cerrado. Amarrar las dos vistas al mismo mes obliga a
- * saltar de septiembre a agosto y de regreso para escribir una sola pieza.
- *
- * El mes de la sección vive en la URL (`?mesResultados=`) y no en estado de
- * React: así se comparte por link, sobrevive al refresh y el botón de atrás
- * hace lo que uno espera. La página raíz es la que lee el query param y lo pasa
- * como prop, porque solo una página puede leer `searchParams`.
- */
 export async function SeccionResultados({
   cliente,
   mes,
   mesResultados,
 }: {
   cliente: Cliente
-  /** El mes del header. Se conserva en los links para no perderlo al navegar. */
   mes: MonthKey
-  /** El mes de esta sección. Sin él se muestra el mismo del header. */
   mesResultados?: MonthKey | undefined
 }) {
   const mesVisible = mesResultados ?? mes
@@ -52,9 +37,11 @@ export async function SeccionResultados({
       </header>
 
       {datos.actual === null ? (
-        <EmptyState
-          title={`Sin datos de ${formatMonthKey(mesVisible)}`}
-          body={`Todavía no hay datos de ${formatMonthKey(mesVisible).split(' ')[0]}. Importa el CSV de Meta Business Suite o captura los números a mano.`}
+        <CapturaDeMetricas
+          clientId={cliente.id}
+          mes={mesVisible}
+          actual={null}
+          abiertoPorDefault={true}
         />
       ) : (
         <>
@@ -86,16 +73,18 @@ export async function SeccionResultados({
 
       <LecturaDelMes lectura={datos.lectura} mes={mesVisible} clientId={cliente.id} />
 
-      <CapturaDeMetricas clientId={cliente.id} mes={mesVisible} actual={datos.actual} />
+      {datos.actual !== null && (
+        <CapturaDeMetricas
+          clientId={cliente.id}
+          mes={mesVisible}
+          actual={datos.actual}
+          abiertoPorDefault={false}
+        />
+      )}
     </>
   )
 }
 
-/**
- * Dos links, no botones con estado. El mes del header viaja en el mismo query
- * para que moverse en resultados no reinicie el resto de la página, y el ancla
- * `#resultados` devuelve el scroll a esta sección después de navegar.
- */
 function SelectorDeMes({
   slug,
   mesHeader,

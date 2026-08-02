@@ -1,5 +1,6 @@
 'use client'
 
+import { Pencil, Upload } from 'lucide-react'
 import { useActionState, useState } from 'react'
 import {
   capturarResultados,
@@ -10,49 +11,79 @@ import { Button, Card, Display, Mono } from '@/components/ui/primitives'
 import type { MetricasMes } from '@/lib/datos/resultados'
 import { formatMonthKey, type MonthKey } from '@/lib/time'
 
-/**
- * Las dos formas de que entren los números: un CSV o a mano.
- *
- * No hay conexión automática a Instagram Graph ni a Meta Ads y en esta etapa no
- * la va a haber: son semanas de trámite por cliente y el agente no distingue de
- * dónde vino el número. La interfaz lo dice en vez de esconderlo.
- */
-
 const INICIAL: EstadoResultados = { status: 'inicial' }
 
-export function CapturaDeMetricas({
-  clientId,
-  mes,
-  actual,
-}: {
+interface Props {
   clientId: string
   mes: MonthKey
   actual: MetricasMes | null
-}) {
-  const [vista, setVista] = useState<'ninguna' | 'csv' | 'mano'>('ninguna')
+  abiertoPorDefault: boolean
+}
+
+/**
+ * Las dos formas de que entren los números: un CSV o a mano.
+ *
+ * Cuando no hay datos, aparece abierto y reemplaza al empty state. Cuando ya hay
+ * métricas capturadas, empieza colapsado en una barra delgada — quien quiera
+ * corregir un número no scrollea hasta encontrarlo; lo abre desde el toggle de
+ * arriba.
+ */
+export function CapturaDeMetricas({ clientId, mes, actual, abiertoPorDefault }: Props) {
+  const [abierto, setAbierto] = useState(abiertoPorDefault)
+  const [vista, setVista] = useState<'csv' | 'mano'>(abiertoPorDefault ? 'csv' : 'csv')
+
+  if (!abierto) {
+    return (
+      <div className="border-line bg-bg mt-6 flex items-center gap-3 rounded-xs border px-4 py-2.5">
+        <Mono className="text-fg-muted flex-1 text-[12px]">
+          {actual
+            ? `Métricas de ${formatMonthKey(mes)} capturadas.`
+            : `${formatMonthKey(mes)} sin métricas.`}
+        </Mono>
+        <Button variant="secondary" type="button" onClick={() => setAbierto(true)}>
+          {actual ? 'Actualizar métricas' : `Capturar ${formatMonthKey(mes)}`}
+        </Button>
+      </div>
+    )
+  }
 
   return (
-    <Card className="mt-10" data-print="hide">
-      <Display as="h3" className="text-base">
-        Capturar resultados de {formatMonthKey(mes)}
-      </Display>
-      <Mono as="p" className="text-fg-muted mt-2">
-        Las métricas entran por CSV o a mano. No hay conexión automática por ahora.
-      </Mono>
+    <Card className="mt-6" data-print="hide">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <Display as="h3" className="text-base">
+            {actual
+              ? `Actualizar métricas de ${formatMonthKey(mes)}`
+              : `Capturar resultados de ${formatMonthKey(mes)}`}
+          </Display>
+          <Mono as="p" className="text-fg-muted mt-2">
+            {actual
+              ? 'Corrige o reemplaza los números. Si algo cambió en el CSV, lo que llegue nuevo pisa lo de antes.'
+              : 'Arrastra el CSV de Meta Business Suite, Metricool o TikTok, o teclea los ocho números. Sin conexión automática por ahora.'}
+          </Mono>
+        </div>
+        {actual && (
+          <Button variant="ghost" type="button" onClick={() => setAbierto(false)}>
+            Cerrar
+          </Button>
+        )}
+      </div>
 
       <div className="mt-4 flex flex-wrap gap-3">
         <Button
           variant={vista === 'csv' ? 'primary' : 'secondary'}
           type="button"
-          onClick={() => setVista(vista === 'csv' ? 'ninguna' : 'csv')}
+          onClick={() => setVista('csv')}
         >
+          <Upload aria-hidden className="mr-1.5 size-3.5" />
           Importar CSV
         </Button>
         <Button
           variant={vista === 'mano' ? 'primary' : 'secondary'}
           type="button"
-          onClick={() => setVista(vista === 'mano' ? 'ninguna' : 'mano')}
+          onClick={() => setVista('mano')}
         >
+          <Pencil aria-hidden className="mr-1.5 size-3.5" />
           Capturar a mano
         </Button>
       </div>
@@ -102,9 +133,9 @@ function FormularioCsv({ clientId }: { clientId: string }) {
           required
           className="border-line bg-bg mt-2 w-full rounded-xs border p-3 text-[13px]"
         />
-        <p className="text-fg-muted mt-2 max-w-prose text-[13px]">
-          Sirve el export de Meta Business Suite tal cual: acepta punto y coma, acentos, miles con
-          punto y columnas de más. Si un renglón viene mal, no se importa nada y te dice en qué
+        <p className="text-fg-muted mt-2 max-w-prose text-[12px]">
+          Acepta el export de Meta Business Suite, Metricool o TikTok: punto y coma, acentos, miles
+          con punto y columnas de más. Si un renglón viene mal, no se importa nada y te dice en qué
           línea está.
         </p>
       </div>
@@ -142,8 +173,6 @@ function FormularioAMano({
 }) {
   const [estado, action, pendiente] = useActionState(capturarResultados, INICIAL)
 
-  // Se precargan los valores que ya había: capturar el mes otra vez casi
-  // siempre es corregir un número, no teclear los ocho desde cero.
   const previos: Record<string, number> = {
     alcance: actual?.alcance ?? 0,
     impresiones: actual?.impresiones ?? 0,
@@ -172,7 +201,6 @@ function FormularioAMano({
               type="number"
               inputMode="numeric"
               step={1}
-              // Seguidores nuevos puede ser negativo; los demás no.
               min={campo.name === 'seguidores_nuevos' ? undefined : 0}
               defaultValue={previos[campo.name] ?? 0}
               required
@@ -193,7 +221,6 @@ function FormularioAMano({
   )
 }
 
-/** El resultado de la acción: el mensaje y, si hubo, los renglones malos. */
 function Resultado({ estado }: { estado: EstadoResultados }) {
   if (estado.status === 'inicial') return null
 
