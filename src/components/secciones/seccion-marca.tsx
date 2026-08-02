@@ -1,16 +1,12 @@
-import { Braces, ChevronRight, Sparkles, TriangleAlert } from 'lucide-react'
+import { ChevronRight } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { Card, Chip, Display, EmptyState, Mono } from '@/components/ui/primitives'
-import {
-  AGENT_LABEL,
-  PIECE_FORMAT_LABEL,
-  RULE_SEVERITY_LABEL,
-  type RuleSeverity,
-} from '@/domain/labels'
+import { AGENT_LABEL, PIECE_FORMAT_LABEL } from '@/domain/labels'
 import type { Cliente } from '@/lib/datos/clientes'
 import type {
   AprendizajeDeMarca,
   ContextCard,
+  NotaDeMarca,
   PiezaConNumeros,
   ReglaDura,
   VersionDeMarca,
@@ -18,6 +14,8 @@ import type {
 import { formatDate } from '@/lib/time'
 import { etiquetaDeCampo } from './etiquetas'
 import { FormularioRegla } from './formulario-regla'
+import { ListadoReglas } from './listado-reglas'
+import { NotaDeMarcaSection } from './nota-de-marca'
 
 /**
  * § Marca — el documento del que se alimentan los agentes.
@@ -32,25 +30,20 @@ import { FormularioRegla } from './formulario-regla'
  * y por eso el número de versión está arriba y no escondido en un pie.
  */
 
-const TONO_SEVERIDAD: Record<RuleSeverity, 'critical' | 'high' | 'medium' | 'neutral'> = {
-  critica: 'critical',
-  alta: 'high',
-  media: 'medium',
-  baja: 'neutral',
-}
-
 export function SeccionMarca({
   cliente,
   contextCard,
   versiones,
   reglas,
   aprendizaje,
+  notaDeMarca,
 }: {
   cliente: Cliente
   contextCard: ContextCard | null
   versiones: VersionDeMarca[]
   reglas: ReglaDura[]
   aprendizaje: AprendizajeDeMarca
+  notaDeMarca: NotaDeMarca | null
 }) {
   return (
     <>
@@ -225,6 +218,12 @@ export function SeccionMarca({
               Toda regla que se pueda verificar por código se verifica por código. A un modelo se le
               convence; a un conteo de hashtags no.
             </p>
+            <p className="text-fg-muted mt-1.5 text-[12px] opacity-70">
+              El Editor de marca evalúa cada pieza contra estas reglas. Una regla Crítica bloquea la
+              pieza; el resto generan una advertencia. Puedes editar el texto y la severidad de
+              cualquier regla con el lápiz. Para cambiar el tipo, bórrala y agrégala de nuevo con
+              los parámetros correctos.
+            </p>
           </div>
           <FormularioRegla clientId={cliente.id} orgId={cliente.orgId} slug={cliente.slug} />
         </header>
@@ -235,38 +234,18 @@ export function SeccionMarca({
             body="Empieza por las dos que ya te sabes de memoria: cuántos hashtags y qué palabra no se usa. Con eso el Editor de marca ya puede revisar cada pieza sin llamar a un modelo."
           />
         ) : (
-          <ul className="flex flex-col">
-            {reglas.map((r) => (
-              <li
-                key={r.id}
-                className="border-line flex flex-wrap items-center gap-x-4 gap-y-2 border-b py-3 last:border-b-0"
-              >
-                <Mono className="text-fg-muted w-24 shrink-0">{r.kind}</Mono>
-                <span className="min-w-[12rem] flex-1 text-[13px]">{r.rule}</span>
-                <Chip tone={TONO_SEVERIDAD[r.severity]}>{RULE_SEVERITY_LABEL[r.severity]}</Chip>
-                <span className="flex w-28 shrink-0 items-center gap-1.5">
-                  {r.checkBy === 'codigo' ? (
-                    <Braces aria-hidden className="text-ok size-3.5" />
-                  ) : (
-                    <Sparkles aria-hidden className="text-fg-muted size-3.5" />
-                  )}
-                  <Mono className="text-fg-muted">
-                    {r.checkBy === 'codigo' ? 'Código' : 'Modelo'}
-                  </Mono>
-                </span>
-                {!r.verificable && (
-                  <span className="text-accent-hot flex w-full items-start gap-1.5 text-[13px]">
-                    <TriangleAlert aria-hidden className="mt-0.5 size-3.5 shrink-0" />
-                    Los parámetros de esta regla no coinciden con lo que el verificador sabe leer,
-                    así que hoy no se está aplicando. Vuelve a darla de alta con el formulario de
-                    abajo.
-                  </span>
-                )}
-              </li>
-            ))}
-          </ul>
+          <ListadoReglas reglas={reglas} clientId={cliente.id} slug={cliente.slug} />
         )}
       </div>
+
+      {/* --- Referencias ------------------------------------------------------ */}
+
+      <NotaDeMarcaSection
+        clientId={cliente.id}
+        orgId={cliente.orgId}
+        slug={cliente.slug}
+        nota={notaDeMarca}
+      />
 
       {/* --- Aprendizaje ---------------------------------------------------- */}
 

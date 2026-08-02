@@ -29,6 +29,7 @@ import {
   historialDeMarca,
   listarArchivos,
   listarEventosPendientes,
+  listarNotasDeMarca,
   listarNotasPrivadas,
   listarRedes,
   listarReglasDuras,
@@ -89,6 +90,7 @@ export default async function ClientePage({ params, searchParams }: Props) {
     tareas,
     eventos,
     notas,
+    notaDeMarca,
   ] = await Promise.all([
     listarPiezas(cliente.id, mes),
     listarStories(cliente.id, mes),
@@ -106,6 +108,7 @@ export default async function ClientePage({ params, searchParams }: Props) {
     listarTareas(cliente.id),
     listarEventosPendientes(cliente.id, hoy),
     listarNotasPrivadas(cliente.id),
+    listarNotasDeMarca(cliente.id),
   ])
 
   const semaforos = redes.map((r) => ({
@@ -183,6 +186,7 @@ export default async function ClientePage({ params, searchParams }: Props) {
                   versiones={versiones}
                   reglas={reglas}
                   aprendizaje={aprendizaje}
+                  notaDeMarca={notaDeMarca}
                 />
               )}
               {id === 'archivos' && <SeccionArchivos archivos={archivos} />}
