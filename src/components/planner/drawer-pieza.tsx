@@ -9,6 +9,7 @@ import { Interruptor, LabelCampo, SegmentedControl } from '@/components/planner/
 import { Drawer } from '@/components/planner/drawer'
 import { PostInstagram } from '@/components/post/post-instagram'
 import { PostTikTok } from '@/components/post/post-tiktok'
+import { PhoneFrame } from '@/components/post/phone-frame'
 import {
   ACCIONES_DE_AGENTE,
   ESTADOS,
@@ -282,46 +283,36 @@ function CuerpoDrawer({
         />
       )}
 
-      {modo === 'post' && vistaPost === 'instagram' && (
-        <PostInstagram
-          handle={contexto.cuenta.handle}
-          avatarUrl={contexto.cuenta.avatarUrl}
-          bio={contexto.cuenta.bio}
-          brandColor={contexto.cuenta.brandColor}
-          imageUrl={contexto.urlAsset}
-          fallbackColor={pilares.find((p) => p.id === pieza.pillarId)?.color ?? null}
-          format={pieza.format}
-          caption={captionVivo}
-          fecha={pieza.publishAt ? formatDate(new Date(pieza.publishAt)) : null}
-        />
-      )}
-
-      {modo === 'post' && vistaPost === 'tiktok' && (
-        <PostTikTok
-          handle={contexto.cuenta.handle}
-          avatarUrl={contexto.cuenta.avatarUrl}
-          bio={contexto.cuenta.bio}
-          brandColor={contexto.cuenta.brandColor}
-          imageUrl={contexto.urlAsset}
-          fallbackColor={pilares.find((p) => p.id === pieza.pillarId)?.color ?? null}
-          format={pieza.format}
-          caption={captionVivo}
-          fecha={pieza.publishAt ? formatDate(new Date(pieza.publishAt)) : null}
-        />
-      )}
-
-      {modo === 'post' && !tieneTikTok && (
-        <PostInstagram
-          handle={contexto.cuenta.handle}
-          avatarUrl={contexto.cuenta.avatarUrl}
-          bio={contexto.cuenta.bio}
-          brandColor={contexto.cuenta.brandColor}
-          imageUrl={contexto.urlAsset}
-          fallbackColor={pilares.find((p) => p.id === pieza.pillarId)?.color ?? null}
-          format={pieza.format}
-          caption={captionVivo}
-          fecha={pieza.publishAt ? formatDate(new Date(pieza.publishAt)) : null}
-        />
+      {modo === 'post' && (
+        <PhoneFrame>
+          {vistaPost === 'instagram' ? (
+            <PostInstagram
+              handle={contexto.cuenta.handle}
+              avatarUrl={contexto.cuenta.avatarUrl}
+              bio={contexto.cuenta.bio}
+              brandColor={contexto.cuenta.brandColor}
+              imageUrl={contexto.urlAsset}
+              fallbackColor={pilares.find((p) => p.id === pieza.pillarId)?.color ?? null}
+              format={pieza.format}
+              caption={captionVivo}
+              fecha={pieza.publishAt ? formatDate(new Date(pieza.publishAt)) : null}
+              frame={false}
+            />
+          ) : (
+            <PostTikTok
+              handle={contexto.cuenta.handle}
+              avatarUrl={contexto.cuenta.avatarUrl}
+              bio={contexto.cuenta.bio}
+              brandColor={contexto.cuenta.brandColor}
+              imageUrl={contexto.urlAsset}
+              fallbackColor={pilares.find((p) => p.id === pieza.pillarId)?.color ?? null}
+              format={pieza.format}
+              caption={captionVivo}
+              fecha={pieza.publishAt ? formatDate(new Date(pieza.publishAt)) : null}
+              frame={false}
+            />
+          )}
+        </PhoneFrame>
       )}
 
       {/* El formulario se oculta con `hidden`, no se desmonta: así el texto sin
