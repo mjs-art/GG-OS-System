@@ -1,4 +1,5 @@
-import { expect, test, type Page } from '@playwright/test'
+import { entrarComoEstudio } from './sesion'
+import { expect, test } from '@playwright/test'
 
 /**
  * Humo del Planner contra la página real del cliente.
@@ -28,41 +29,11 @@ import { expect, test, type Page } from '@playwright/test'
  */
 test.describe.configure({ mode: 'serial' })
 
-const MAILPIT = 'http://127.0.0.1:54324'
-
-async function ultimoLinkPara(correo: string): Promise<string> {
-  let messages: Array<{ ID: string; Created: string }> = []
-  for (let i = 0; i < 40 && messages.length === 0; i++) {
-    const r = await fetch(`${MAILPIT}/api/v1/search?query=${encodeURIComponent(`to:${correo}`)}`)
-    ;({ messages } = (await r.json()) as { messages: typeof messages })
-    if (messages.length === 0) await new Promise((res) => setTimeout(res, 250))
-  }
-  const id = [...messages].sort((a, b) => b.Created.localeCompare(a.Created))[0]?.ID
-  if (!id) throw new Error(`No llegó correo a ${correo}`)
-  const cuerpo = (await (await fetch(`${MAILPIT}/api/v1/message/${id}`)).json()) as {
-    Text?: string
-  }
-  const link = (cuerpo.Text ?? '').match(/https?:\/\/[^\s"'<>]+verify[^\s"'<>]*/)?.[0]
-  if (!link) throw new Error('El correo no traía link de verificación')
-  return link.replaceAll('&amp;', '&')
-}
-
-/** Su propio usuario: dos specs que comparten buzón se roban el magic link. */
-async function entrar(page: Page) {
-  await page.goto('/entrar')
-  await page.waitForFunction(() => document.body.dataset['hidratado'] === '1')
-  await page.getByLabel('Correo').fill('e2e-planner@ejemplo.test')
-  await page.getByRole('button', { name: 'Mandar link' }).click()
-  await expect(page.getByText('Revisa tu correo')).toBeVisible()
-  await page.goto(await ultimoLinkPara('e2e-planner@ejemplo.test'))
-  await page.waitForLoadState('networkidle')
-}
-
-test('todas las secciones del cliente cargan sin reventar', async ({ page }) => {
+test('todas las secciones del cliente cargan sin reventar', async ({ page }, info) => {
   const errores: string[] = []
   page.on('pageerror', (e) => errores.push(String(e)))
 
-  await entrar(page)
+  await entrarComoEstudio(page, info)
   await page.goto('/cliente/bar-ficticio?mes=2026-09')
   await page.waitForLoadState('networkidle')
 
