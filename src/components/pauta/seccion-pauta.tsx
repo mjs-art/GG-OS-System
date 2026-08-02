@@ -63,7 +63,7 @@ export function SeccionPauta({
         {activas.length === 0 ? (
           <EmptyState
             title="No hay pauta corriendo"
-            body="Arma la campaña en Meta o TikTok Ads, captúrala aquí con sus ad sets y su objetivo de aprendizaje, y el Pautero empieza a leerla en cuanto haya tres días de métricas."
+            body="Arma la campaña en Meta o TikTok Ads y captúrala aquí con sus ad sets. El Pautero la empieza a leer en cuanto haya tres días de métricas."
           />
         ) : (
           <div className="flex flex-col gap-4">

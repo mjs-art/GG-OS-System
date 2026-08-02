@@ -149,10 +149,12 @@ export function PlannerCliente({
         } else if (!r.ok) {
           toast.error('No se pudo correr el Redactor', { description: r.message })
         }
-      } catch {
-        toast.error('No se pudo correr el Redactor', {
-          description: 'Falló la conexión. Inténtalo de nuevo.',
-        })
+      } catch (err) {
+        const message =
+          err instanceof TypeError
+            ? 'No hay conexión con el servidor. Revisa tu internet y vuelve a intentarlo.'
+            : 'Falló la conexión. Si el problema persiste, recarga la página.'
+        toast.error('No se pudo correr el Redactor', { description: message })
       } finally {
         setCorriendo(false)
       }

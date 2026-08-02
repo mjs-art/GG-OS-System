@@ -58,7 +58,15 @@ export function SeccionCalendario({
       {entradas.length === 0 ? (
         <EmptyState
           title={`Nada con fecha en ${formatMonthKey(mes)}`}
-          body="Las piezas aparecen aquí en cuanto tengan fecha de publicación. Asígnalas arrastrándolas en el planner."
+          body="Las piezas aparecen aquí en cuanto tengan fecha de publicación."
+          action={
+            <Link
+              href={`/cliente/${cliente.slug}?mes=${mes}#planner`}
+              className="type-mono text-accent-hot hover:underline"
+            >
+              Asignar fechas en el planner →
+            </Link>
+          }
         />
       ) : (
         <RejillaMes

@@ -22,7 +22,7 @@ export function Historico({ campanas }: { campanas: CampanaPauta[] }) {
     return (
       <EmptyState
         title="Todavía no cierra ninguna campaña"
-        body="Cuando una campaña termine, ciérrala y escribe qué aprendiste. Eso es lo que lee el Pautero para armar la siguiente."
+        body="Cuando una campaña termine, ciérrala desde la tarjeta de arriba y escribe qué aprendiste. Ese aprendizaje es lo que lee el Pautero para no repetir errores."
       />
     )
   }

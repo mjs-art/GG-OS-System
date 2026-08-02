@@ -3,6 +3,7 @@
 import { useActionState, useState } from 'react'
 import { aplicarCambioDelAnalista, type EstadoResultados } from '@/components/resultados/acciones'
 import { Button, Mono } from '@/components/ui/primitives'
+import type { MonthKey } from '@/lib/time'
 
 /**
  * "Para mitad de mes": las piezas que todavía no salen y que el Analista sugiere
@@ -12,10 +13,9 @@ import { Button, Mono } from '@/components/ui/primitives'
  * adelanto los resultados no alcanzan para replanear, pero sí para corregir tres
  * piezas que aún no se publican.
  *
- * **Ignorar es local.** No hay tabla donde guardar "esta sugerencia ya la vi", y
- * agregarla es una migración que no puedo escribir desde aquí. Se descarta de la
- * lista mientras dura la sesión y regresa al recargar. Es un límite real y por
- * eso está escrito, no escondido.
+ * **Ignorar persiste en localStorage** por mes y por cliente. Las sugerencias
+ * descartadas no reaparecen al recargar, pero sí el mes siguiente cuando el
+ * Analista vuelva a correr.
  */
 
 const INICIAL: EstadoResultados = { status: 'inicial' }
@@ -39,16 +39,40 @@ const LABEL_CAMPO: Record<CambioPropuesto['field'], string> = {
 
 export function CambiosDeMitadDeMes({
   clientId,
+  mes,
   cambios,
   sinPublicar,
   hookPorPieza,
 }: {
   clientId: string
+  mes: MonthKey
   cambios: readonly CambioPropuesto[]
   sinPublicar: number
   hookPorPieza: Record<string, string>
 }) {
-  const [ignorados, setIgnorados] = useState<ReadonlySet<string>>(new Set())
+  const almacen = `cambios-ignorados:${clientId}:${mes}`
+
+  function leerIgnorados(): Set<string> {
+    if (typeof window === 'undefined') return new Set()
+    try {
+      const raw = localStorage.getItem(almacen)
+      return raw ? new Set(JSON.parse(raw) as string[]) : new Set()
+    } catch {
+      return new Set()
+    }
+  }
+
+  const [ignorados, setIgnorados] = useState<ReadonlySet<string>>(leerIgnorados)
+
+  function ignorar(clave: string) {
+    const nuevo = new Set(ignorados).add(clave)
+    setIgnorados(nuevo)
+    try {
+      localStorage.setItem(almacen, JSON.stringify([...nuevo]))
+    } catch {
+      // localStorage lleno o en modo privado. El descarte dura la sesión.
+    }
+  }
   const visibles = cambios.filter((c) => !ignorados.has(claveDe(c)))
 
   if (cambios.length === 0) {
@@ -85,7 +109,7 @@ export function CambiosDeMitadDeMes({
               clientId={clientId}
               cambio={cambio}
               hook={hookPorPieza[cambio.piece_id] ?? 'Pieza sin hook'}
-              onIgnorar={() => setIgnorados((prev) => new Set(prev).add(claveDe(cambio)))}
+              onIgnorar={() => ignorar(claveDe(cambio))}
             />
           ))}
         </ul>

@@ -70,7 +70,7 @@ export function SeccionPendientes({
         {eventos.length === 0 ? (
           <EmptyState
             title="Nada agendado por cubrir"
-            body="Agenda la sesión de foto o la cobertura del próximo evento y aparece aquí con su fecha y su lugar, junto con las piezas que dependen de ese material."
+            body="Agenda la sesión de foto o la cobertura del próximo evento. Cuando el material se capture, aparece aquí con su fecha, su lugar y las piezas que dependen de él."
           />
         ) : (
           <ul className="flex flex-col">

@@ -63,6 +63,7 @@ export function LecturaDelMes({
 
       <CambiosDeMitadDeMes
         clientId={clientId}
+        mes={mes}
         cambios={reporte.para_mitad_de_mes.changes}
         sinPublicar={reporte.para_mitad_de_mes.unpublished_count}
         hookPorPieza={lectura.hookPorPieza}

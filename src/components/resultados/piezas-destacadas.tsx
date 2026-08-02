@@ -1,4 +1,4 @@
-import { Display, Mono } from '@/components/ui/primitives'
+import { Display, EmptyState, Mono } from '@/components/ui/primitives'
 import { PIECE_FORMAT_LABEL } from '@/domain/labels'
 import { formatearNumero } from '@/domain/metricas'
 import type { PiezaConMetricas } from '@/lib/datos/resultados'
@@ -24,12 +24,12 @@ export function PiezasDestacadas({
     <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
       <ListaDePiezas
         titulo="Top 5 piezas"
-        vacio="Sin piezas medidas todavía este mes."
+        vacio="Sin piezas medidas todavía este mes. Importa el CSV en la sección de captura para que aparezcan aquí."
         piezas={top}
       />
       <ListaDePiezas
         titulo="Últimas 3"
-        vacio="Todavía no se publica ninguna pieza con métricas."
+        vacio="Todavía no se publica ninguna pieza con métricas. Las piezas aparecen cuando alcanzan el estado publicado."
         piezas={ultimas}
       />
     </div>
@@ -52,7 +52,7 @@ function ListaDePiezas({
       </Display>
 
       {piezas.length === 0 ? (
-        <p className="text-fg-muted text-[13px]">{vacio}</p>
+        <EmptyState title={titulo} body={vacio} />
       ) : (
         <ul className="flex flex-col">
           {piezas.map((pieza) => (

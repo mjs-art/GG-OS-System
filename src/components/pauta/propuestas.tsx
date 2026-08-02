@@ -84,32 +84,6 @@ function Propuesta({ propuesta, slug }: { propuesta: PropuestaPauta; slug: strin
       </header>
 
       <div className="flex flex-col gap-5 p-5">
-        <p className="max-w-prose text-[14px] leading-relaxed">{propuesta.razonamiento}</p>
-
-        <Renglon label="Sugiero">
-          <Display className="text-sm">
-            {PROPUESTA_TIPO_LABEL[propuesta.tipo]}
-            {propuesta.adSetNombre ? ` · ${propuesta.adSetNombre}` : ''}
-          </Display>
-        </Renglon>
-
-        {propuesta.impacto && (
-          <Renglon label="Impacto estimado">
-            <Mono className="text-fg">{propuesta.impacto}</Mono>
-          </Renglon>
-        )}
-
-        {propuesta.riesgo && (
-          <Renglon label="Riesgo">
-            <Mono className="text-fg">{propuesta.riesgo}</Mono>
-            {propuesta.alternativa.razonamiento && (
-              <Mono className="text-fg-muted mt-1.5 block">
-                Alternativa: {propuesta.alternativa.razonamiento}
-              </Mono>
-            )}
-          </Renglon>
-        )}
-
         {sinDecidir && (
           <form action={decidir} className="flex flex-col gap-3">
             <input type="hidden" name="propuestaId" value={propuesta.id} />
@@ -148,6 +122,40 @@ function Propuesta({ propuesta, slug }: { propuesta: PropuestaPauta; slug: strin
             {estado.estado === 'error' && <Mono className="text-accent-hot">{estado.mensaje}</Mono>}
           </form>
         )}
+
+        <details className="border-line group border-t pt-4" open={sinDecidir}>
+          <summary className="type-mono text-fg-muted hover:text-fg cursor-pointer list-none select-none">
+            Leer el razonamiento del Pautero
+          </summary>
+
+          <div className="mt-4 flex flex-col gap-4">
+            <p className="max-w-prose text-[14px] leading-relaxed">{propuesta.razonamiento}</p>
+
+            <Renglon label="Sugiero">
+              <Display className="text-sm">
+                {PROPUESTA_TIPO_LABEL[propuesta.tipo]}
+                {propuesta.adSetNombre ? ` · ${propuesta.adSetNombre}` : ''}
+              </Display>
+            </Renglon>
+
+            {propuesta.impacto && (
+              <Renglon label="Impacto estimado">
+                <Mono className="text-fg">{propuesta.impacto}</Mono>
+              </Renglon>
+            )}
+
+            {propuesta.riesgo && (
+              <Renglon label="Riesgo">
+                <Mono className="text-fg">{propuesta.riesgo}</Mono>
+                {propuesta.alternativa.razonamiento && (
+                  <Mono className="text-fg-muted mt-1.5 block">
+                    Alternativa: {propuesta.alternativa.razonamiento}
+                  </Mono>
+                )}
+              </Renglon>
+            )}
+          </div>
+        </details>
 
         {porAplicar && <PorAplicar propuesta={propuesta} slug={slug} />}
 

@@ -216,14 +216,17 @@ export function SeccionMarca({
       {/* --- Reglas duras --------------------------------------------------- */}
 
       <div className="mt-12">
-        <header className="border-line mb-4 border-b pb-3">
-          <Display as="h3" className="text-base">
-            Reglas duras
-          </Display>
-          <p className="text-fg-muted mt-1 text-[13px]">
-            Toda regla que se pueda verificar por código se verifica por código. A un modelo se le
-            convence; a un conteo de hashtags no.
-          </p>
+        <header className="border-line mb-4 flex flex-wrap items-end justify-between gap-4 border-b pb-3">
+          <div>
+            <Display as="h3" className="text-base">
+              Reglas duras
+            </Display>
+            <p className="text-fg-muted mt-1 text-[13px]">
+              Toda regla que se pueda verificar por código se verifica por código. A un modelo se le
+              convence; a un conteo de hashtags no.
+            </p>
+          </div>
+          <FormularioRegla clientId={cliente.id} orgId={cliente.orgId} slug={cliente.slug} />
         </header>
 
         {reglas.length === 0 ? (
@@ -263,8 +266,6 @@ export function SeccionMarca({
             ))}
           </ul>
         )}
-
-        <FormularioRegla clientId={cliente.id} orgId={cliente.orgId} slug={cliente.slug} />
       </div>
 
       {/* --- Aprendizaje ---------------------------------------------------- */}
