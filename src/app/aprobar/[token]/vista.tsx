@@ -1,4 +1,5 @@
 import { PostInstagram } from '@/components/post/post-instagram'
+import { EmptyState } from '@/components/ui/primitives'
 import { componerCaption } from '@/domain/post-preview'
 import type { AssetSource } from '@/lib/datos/clientes'
 import { urlsDeAssets } from '@/lib/datos/planner'
@@ -82,12 +83,10 @@ export async function VistaPortal({
 
       {lista.length === 0 ? (
         <div className="mx-auto max-w-3xl px-6">
-          <div className="border-line rounded-xs border border-dashed p-8">
-            <p className="type-display text-lg">Todavía no hay nada que revisar</p>
-            <p className="text-fg-muted mt-2 text-[13px]">
-              En cuanto el estudio te mande el mes, lo vas a ver aquí.
-            </p>
-          </div>
+          <EmptyState
+            title="Todavía no hay nada que revisar"
+            body="En cuanto el estudio te mande el mes, lo vas a ver aquí."
+          />
         </div>
       ) : (
         <div className="mx-auto flex max-w-sm flex-col gap-12 px-6">

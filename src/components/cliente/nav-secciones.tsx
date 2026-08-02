@@ -40,7 +40,11 @@ export function NavSecciones() {
   return (
     <nav
       aria-label="Secciones del cliente"
+      // top-14 (3.5rem barra del layout) + ~4rem del HeaderCliente
+      // (mt-4 + display text-xl + subtext + barra de mes con pb-4).
+      // Si cambia la altura del header, ajustar este número.
       className="sticky top-[7.5rem] hidden h-fit w-40 shrink-0 lg:block"
+      data-print="hide"
     >
       <ul className="flex flex-col">
         {SECCIONES.map(({ id, label, privado }) => {
