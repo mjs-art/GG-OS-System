@@ -52,6 +52,12 @@ export function Importador({ contexto }: { contexto: ContextoDeImportacion }) {
 
   const procesarArchivo = useCallback(async (archivo: File) => {
     const nombre = archivo.name.toLowerCase()
+    if (nombre.endsWith('.md')) {
+      setErrorArchivo(
+        'Este es el documento de marca (.md), no el calendario. Para importar la ficha de marca ve a Clientes → Nuevo cliente y arrastra el .md ahí.',
+      )
+      return
+    }
     if (!nombre.endsWith('.csv') && !nombre.endsWith('.json')) {
       setErrorArchivo('Solo se aceptan archivos .csv o .json exportados de Notion.')
       return

@@ -1,7 +1,7 @@
 'use client'
 
 import { Upload } from 'lucide-react'
-import { useActionState, useCallback, useRef, useState } from 'react'
+import { useActionState, useRef, useState } from 'react'
 import { slugify } from '@/domain/slug'
 import { Button, Display, Mono } from '@/components/ui/primitives'
 import { crearClienteAccion, type EstadoAlta } from './acciones'
@@ -67,23 +67,19 @@ export function FormularioAlta({ orgs }: { orgs: OrgDelUsuario[] }) {
 
   const pilaresLlenos = pilares.filter((p) => p.name.trim() !== '')
 
-  // Drag & drop del .md de Notion
+  // Procesa el texto del .md (venga de un archivo o del textarea)
+  const [textoMd, setTextoMd] = useState('')
+  const [mostrarPegar, setMostrarPegar] = useState(false)
   const [arrastrando, setArrastrando] = useState(false)
   const [parseando, setParseando] = useState(false)
   const [errorParseo, setErrorParseo] = useState<string | null>(null)
   const archivoRef = useRef<HTMLInputElement>(null)
 
-  const procesarArchivo = useCallback(async (archivo: File) => {
-    if (!archivo.name.endsWith('.md') && !archivo.name.endsWith('.txt')) {
-      setErrorParseo('Solo se aceptan archivos .md exportados de Notion.')
-      return
-    }
-
+  const procesarTexto = async (texto: string) => {
     setParseando(true)
     setErrorParseo(null)
 
     try {
-      const texto = await archivo.text()
       const formData = new FormData()
       formData.set('content', texto)
 
@@ -97,7 +93,6 @@ export function FormularioAlta({ orgs }: { orgs: OrgDelUsuario[] }) {
         }
         if (d.colorDeMarca) setBrandColor(d.colorDeMarca)
 
-        // Pilares del MD: se agregan al final, con colores auto-generados
         if (d.pilares.length > 0) {
           setPilares((prev) => {
             const inicio = prev.filter((p) => p.name.trim() !== '').length
@@ -118,11 +113,25 @@ export function FormularioAlta({ orgs }: { orgs: OrgDelUsuario[] }) {
         setErrorParseo(resultado.message ?? 'No se pudo leer el archivo.')
       }
     } catch {
-      setErrorParseo('No se pudo leer el archivo. ¿Está en formato .md?')
+      setErrorParseo('No se pudo procesar el texto.')
     } finally {
       setParseando(false)
     }
-  }, [])
+  }
+
+  const procesarArchivo = async (archivo: File) => {
+    setParseando(true)
+    setErrorParseo(null)
+
+    try {
+      const texto = await archivo.text()
+      await procesarTexto(texto)
+    } catch {
+      setErrorParseo('No se pudo leer el archivo.')
+    } finally {
+      setParseando(false)
+    }
+  }
 
   const onDrop = (e: React.DragEvent) => {
     e.preventDefault()
@@ -148,48 +157,86 @@ export function FormularioAlta({ orgs }: { orgs: OrgDelUsuario[] }) {
       <input type="hidden" name="pilares" value={JSON.stringify(pilaresLlenos)} />
       <input type="hidden" name="datosDeMarca" value={datosMarcaJson} />
 
-      {/* Drag & drop del .md de Notion */}
-      <div
-        className={cn(
-          'border-line flex flex-col items-center gap-3 rounded-xs border border-dashed px-6 py-5 transition-colors',
-          arrastrando && 'border-accent-hot bg-surface',
-          parseando && 'opacity-60',
-        )}
-        onDragOver={(e) => {
-          e.preventDefault()
-          setArrastrando(true)
-        }}
-        onDragLeave={() => setArrastrando(false)}
-        onDrop={onDrop}
-        onClick={() => archivoRef.current?.click()}
-        role="button"
-        tabIndex={0}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') archivoRef.current?.click()
-        }}
-      >
-        <Upload aria-hidden className="text-fg-muted size-5" />
-        <div className="text-center">
-          <p className="text-fg-muted text-[13px]">
-            {parseando
-              ? 'Leyendo el archivo…'
-              : 'Arrastra el .md de Notion para llenar todo de un jalón'}
-          </p>
-          <p className="text-fg-muted mt-1 text-[12px] opacity-70">
-            Nombre, color de marca, pilares, audiencia, tono y diferenciadores se llenan solos.
-          </p>
-        </div>
-        <input
-          ref={archivoRef}
-          type="file"
-          accept=".md,.txt"
-          className="hidden"
-          onChange={(e) => {
-            const archivo = e.target.files?.[0]
-            if (archivo) procesarArchivo(archivo)
-            if (archivoRef.current) archivoRef.current.value = ''
+      {/* Drag & drop o pegar del .md de Notion */}
+      {!mostrarPegar ? (
+        <div
+          className={cn(
+            'border-line flex flex-col items-center gap-3 rounded-xs border border-dashed px-6 py-5 transition-colors',
+            arrastrando && 'border-accent-hot bg-surface',
+            parseando && 'opacity-60',
+          )}
+          onDragOver={(e) => {
+            e.preventDefault()
+            setArrastrando(true)
           }}
-        />
+          onDragLeave={() => setArrastrando(false)}
+          onDrop={onDrop}
+          onClick={() => archivoRef.current?.click()}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') archivoRef.current?.click()
+          }}
+        >
+          <Upload aria-hidden className="text-fg-muted size-5" />
+          <div className="text-center">
+            <p className="text-fg-muted text-[13px]">
+              {parseando
+                ? 'Leyendo el archivo…'
+                : arrastrando
+                  ? 'Suelta el archivo aquí'
+                  : 'Arrastra el documento de Notion para llenar todo de un jalón'}
+            </p>
+            <p className="text-fg-muted mt-1 text-[12px] opacity-70">
+              Nombre, color de marca, pilares, audiencia, tono y diferenciadores se llenan solos.
+            </p>
+          </div>
+          <input
+            ref={archivoRef}
+            type="file"
+            accept=".md,.txt,text/*"
+            className="hidden"
+            onChange={(e) => {
+              const archivo = e.target.files?.[0]
+              if (archivo) procesarArchivo(archivo)
+              if (archivoRef.current) archivoRef.current.value = ''
+            }}
+          />
+        </div>
+      ) : (
+        <div className="flex flex-col gap-3">
+          <textarea
+            value={textoMd}
+            onChange={(e) => setTextoMd(e.target.value)}
+            rows={8}
+            spellCheck={false}
+            placeholder="Pega aquí el contenido del documento .md de Notion…"
+            className="border-line bg-bg text-fg type-mono w-full rounded-xs border p-3 text-[12px]"
+          />
+          <div className="flex items-center gap-3">
+            <Button
+              variant="primary"
+              type="button"
+              disabled={parseando || textoMd.trim() === ''}
+              onClick={() => procesarTexto(textoMd)}
+            >
+              {parseando ? 'Leyendo…' : 'Procesar texto'}
+            </Button>
+          </div>
+        </div>
+      )}
+
+      <div className="-mt-6 flex justify-end">
+        <Button
+          variant="ghost"
+          type="button"
+          onClick={() => {
+            setMostrarPegar(!mostrarPegar)
+            setErrorParseo(null)
+          }}
+        >
+          {mostrarPegar ? 'Arrastrar archivo en vez de pegar' : 'Pegar texto en vez de arrastrar'}
+        </Button>
       </div>
 
       {errorParseo && (
