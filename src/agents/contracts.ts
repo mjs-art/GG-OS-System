@@ -343,14 +343,32 @@ export const analistaOutputSchema = outputOf(analistaReportSchema)
  * tendencia y el scraping se rompe solo. La tendencia entra por el radar
  * manual y el agente la traduce a guion. Por eso `trend` es entrada obligatoria.
  */
+/**
+ * Los dos enums salen de `app.trend_kind` y `app.trend_momentum`, y tienen que
+ * seguir saliendo de ahí.
+ *
+ * Estaban desalineados: el contrato decía `angulo` donde la base dice `tema`, y
+ * `estable` donde dice `pico`. El efecto no era un error de compilación sino
+ * algo peor — el Guionista podía emitir una salida perfectamente válida contra
+ * su schema que era **irrepresentable** en la tabla, y el fallo aparecía hasta
+ * el INSERT, lejos de donde se originó.
+ *
+ * Si algún día cambia el enum de la base, esto tiene que cambiar con él. Los
+ * mapas de etiquetas de `src/domain/tendencias.ts` se derivan de los tipos
+ * generados, así que ahí el compilador sí avisa; aquí no, y por eso el
+ * comentario.
+ */
+export const trendKindSchema = z.enum(['audio', 'formato', 'reto', 'tema'])
+export const trendMomentumSchema = z.enum(['subiendo', 'pico', 'bajando'])
+
 export const trendSchema = z.object({
   trend_id: uuidSchema,
   platform: platformSchema,
-  kind: z.enum(['formato', 'audio', 'angulo', 'reto']),
+  kind: trendKindSchema,
   title: nonEmpty,
   audio_url: z.url().nullable(),
   reference_url: z.url().nullable(),
-  momentum: z.enum(['subiendo', 'estable', 'bajando']),
+  momentum: trendMomentumSchema,
   spotted_at: z.iso.date(),
   notes: z.string().nullable(),
 })

@@ -28,13 +28,10 @@ tags = ["supabase"]
 [[rules]]
 id = "supabase-personal-access-token"
 description = "Supabase personal access token (sbp_...) — API de gestión de la cuenta completa"
+# Hex de 40 es el formato de hoy, pero el patrón va abierto a propósito: si
+# Supabase cambia la codificación, una regla estrecha deja de proteger sin que
+# nadie se entere.
 regex = '''sbp_[A-Za-z0-9]{40,}'''
-tags = ["supabase", "critical"]
-
-[[rules]]
-id = "supabase-personal-access-token"
-description = "Supabase personal access token (sbp_...) — llave de la CUENTA, no de un proyecto"
-regex = '''sbp_[a-f0-9]{40}'''
 tags = ["supabase", "critical"]
 
 [[rules]]

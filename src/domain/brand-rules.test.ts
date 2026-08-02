@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { checkCodeRules, type CheckablePiece, type CodeRule } from './brand-rules'
+import {
+  checkCodeRules,
+  normalizarParamsDeRegla,
+  type CheckablePiece,
+  type CodeRule,
+} from './brand-rules'
 
 const rule = (id: string, params: CodeRule['params'], severity: CodeRule['severity'] = 'critica') =>
   ({ id, rule: `regla ${id}`, severity, params }) satisfies CodeRule
@@ -106,5 +111,65 @@ describe('robustez', () => {
       violations: [],
       blocking: false,
     })
+  })
+})
+
+describe('normalizarParamsDeRegla', () => {
+  it('deja pasar la forma canónica sin tocarla', () => {
+    const canonico = { kind: 'hashtags_exact', count: 5 } as const
+    expect(normalizarParamsDeRegla('hashtags', canonico)).toEqual(canonico)
+  })
+
+  it('traduce la forma abreviada del seed', () => {
+    expect(normalizarParamsDeRegla('hashtags', { exact: 5 })).toEqual({
+      kind: 'hashtags_exact',
+      count: 5,
+    })
+    expect(normalizarParamsDeRegla('formato', { lowercase: true })).toEqual({ kind: 'lowercase' })
+    expect(normalizarParamsDeRegla('hashtags', { min: 3, max: 7 })).toEqual({
+      kind: 'hashtags_range',
+      min: 3,
+      max: 7,
+    })
+    expect(normalizarParamsDeRegla('prohibidas', { words: ['único'] })).toEqual({
+      kind: 'banned_words',
+      words: ['único'],
+    })
+  })
+
+  it('el CTA obligatorio depende del tipo de regla, no solo del params', () => {
+    expect(normalizarParamsDeRegla('cta', { required: true })).toEqual({ kind: 'required_cta' })
+    // El mismo params bajo otro tipo no significa lo mismo.
+    expect(normalizarParamsDeRegla('otra', { required: true })).toBeNull()
+  })
+
+  it('devuelve null en vez de adivinar cuando no se entiende', () => {
+    for (const basura of [
+      null,
+      undefined,
+      42,
+      'texto',
+      {},
+      { exact: 'cinco' },
+      { words: [1, 2] },
+    ]) {
+      expect(normalizarParamsDeRegla('hashtags', basura), `${JSON.stringify(basura)}`).toBeNull()
+    }
+  })
+
+  it('lo que traduce es efectivamente aplicable', () => {
+    // La prueba que importa: no basta con producir un objeto, tiene que
+    // servirle a checkCodeRules. Con la forma del seed sin traducir, las tres
+    // reglas del cliente se reportaban como mal configuradas y no verificaban
+    // nada.
+    const params = normalizarParamsDeRegla('hashtags', { exact: 5 })
+    if (params === null) throw new Error('la forma del seed debería traducirse')
+
+    const { violations } = checkCodeRules(
+      [{ id: 'r1', rule: 'exactamente 5', severity: 'critica', params }],
+      { hashtags: ['#a', '#b'] },
+    )
+    expect(violations).toHaveLength(1)
+    expect(violations[0]?.found).toContain('2 hashtags')
   })
 })
