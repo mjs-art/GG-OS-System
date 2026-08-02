@@ -50,5 +50,11 @@ export async function GET(request: NextRequest) {
     return redirigirA(request, '/entrar?error=link_invalido')
   }
 
+  // Si alguien te invitó al equipo mientras no tenías cuenta (o mientras no
+  // habías vuelto a entrar), aquí es donde esa invitación se convierte en
+  // membership. Un error aquí no debe tumbar el login: en el peor caso, la
+  // invitación se acepta la próxima vez que se corra este mismo código.
+  await supabase.rpc('accept_pending_invites')
+
   return redirigirA(request, destino)
 }
