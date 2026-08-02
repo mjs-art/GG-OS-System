@@ -249,6 +249,86 @@ const reglaSchema = z
     path: ['palabras'],
   })
 
+export async function editarReglaDura(formData: FormData): Promise<EstadoRegla> {
+  const parsed = z
+    .object({
+      id: z.uuid(),
+      clientId: z.uuid(),
+      slug: slugSchema,
+      rule: z
+        .string()
+        .trim()
+        .min(1, 'Escribe la regla como se la dirías a alguien nuevo del equipo.')
+        .max(500, 'La regla no puede pasar de 500 caracteres. Pártela en dos.'),
+      severity: ruleSeverity,
+    })
+    .safeParse({
+      id: formData.get('id'),
+      clientId: formData.get('clientId'),
+      slug: formData.get('slug'),
+      rule: formData.get('rule'),
+      severity: formData.get('severity'),
+    })
+
+  if (!parsed.success) {
+    return { status: 'error', message: parsed.error.issues[0]?.message ?? 'Revisa el formulario.' }
+  }
+
+  const { id, clientId, slug, rule, severity } = parsed.data
+  const supabase = await createClient()
+
+  const { data, error } = await supabase
+    .from('brand_rules')
+    .update({ rule, severity })
+    .eq('id', id)
+    .eq('client_id', clientId)
+    .select('id')
+
+  if (error) return { status: 'error', message: `No se pudo guardar: ${error.message}` }
+  if ((data ?? []).length === 0) {
+    return { status: 'error', message: 'Esa regla ya no existe. Recarga la sección.' }
+  }
+
+  refrescarCliente(slug)
+  return { status: 'guardada', message: 'Regla guardada.' }
+}
+
+export async function borrarReglaDura(formData: FormData): Promise<EstadoRegla> {
+  const parsed = z
+    .object({
+      id: z.uuid(),
+      clientId: z.uuid(),
+      slug: slugSchema,
+    })
+    .safeParse({
+      id: formData.get('id'),
+      clientId: formData.get('clientId'),
+      slug: formData.get('slug'),
+    })
+
+  if (!parsed.success) {
+    return { status: 'error', message: 'No se pudo identificar la regla. Recarga la sección.' }
+  }
+
+  const { id, clientId, slug } = parsed.data
+  const supabase = await createClient()
+
+  const { data, error } = await supabase
+    .from('brand_rules')
+    .delete()
+    .eq('id', id)
+    .eq('client_id', clientId)
+    .select('id')
+
+  if (error) return { status: 'error', message: `No se pudo borrar: ${error.message}` }
+  if ((data ?? []).length === 0) {
+    return { status: 'error', message: 'Esa regla ya no existe. Recarga la sección.' }
+  }
+
+  refrescarCliente(slug)
+  return { status: 'guardada', message: 'Regla borrada.' }
+}
+
 export async function agregarReglaDura(formData: FormData): Promise<EstadoRegla> {
   const parsed = reglaSchema.safeParse({
     clientId: formData.get('clientId'),
@@ -428,4 +508,51 @@ export async function borrarNotaPrivada(formData: FormData): Promise<EstadoNota>
 
   refrescarCliente(parsed.data.slug)
   return { status: 'borrada', message: 'Nota borrada.' }
+}
+
+/* ==========================================================================
+   § MARCA — notas de marca
+   ========================================================================== */
+
+const notaMarcaSchema = idsSchema.extend({
+  body: z.string().max(50_000, 'La nota llegó al tope de 50,000 caracteres.'),
+})
+
+export async function guardarNotaDeMarca(formData: FormData): Promise<EstadoNota> {
+  const parsed = notaMarcaSchema.safeParse({
+    clientId: formData.get('clientId'),
+    orgId: formData.get('orgId'),
+    slug: formData.get('slug'),
+    body: formData.get('body'),
+  })
+
+  if (!parsed.success) {
+    return { status: 'error', message: parsed.error.issues[0]?.message ?? 'Revisa la nota.' }
+  }
+
+  const { clientId, orgId, slug, body } = parsed.data
+  const supabase = await createClient()
+
+  const { data: existente } = await supabase
+    .from('brand_notes')
+    .select('id')
+    .eq('client_id', clientId)
+    .maybeSingle()
+
+  if (existente) {
+    const { error } = await supabase.from('brand_notes').update({ body }).eq('id', existente.id)
+
+    if (error) return { status: 'error', message: `No se pudo guardar: ${error.message}` }
+  } else {
+    const { error } = await supabase.from('brand_notes').insert({
+      org_id: orgId,
+      client_id: clientId,
+      body,
+    })
+
+    if (error) return { status: 'error', message: `No se pudo guardar: ${error.message}` }
+  }
+
+  refrescarCliente(slug)
+  return { status: 'guardada', message: 'Nota de marca guardada.' }
 }

@@ -462,5 +462,11 @@ insert into public.events (org_id, client_id, title, scheduled_on, place, notes)
    'Luz natural; llegar antes de las 4 pm.'),
   ('aaaaaaaa-0000-4000-8000-000000000001', 'cccccccc-0000-4000-8000-000000000001',
    'Cobertura del aniversario', '2026-08-24', 'Bar Ficticio',
-   'Video vertical toda la noche; se corta en tres reels.')
+    'Video vertical toda la noche; se corta en tres reels.')
+on conflict do nothing;
+
+-- --- Notas de marca ---------------------------------------------------------------
+insert into public.brand_notes (org_id, client_id, body) values
+  ('aaaaaaaa-0000-4000-8000-000000000001', 'cccccccc-0000-4000-8000-000000000001',
+   'Aprovechar el video vertical del aniversario para tres reels de la semana siguiente.')
 on conflict do nothing;

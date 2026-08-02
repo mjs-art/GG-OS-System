@@ -497,3 +497,28 @@ export async function listarNotasPrivadas(clientId: string): Promise<NotaPrivada
 
   return (data ?? []).map((n) => ({ id: n.id, body: n.body, updatedAt: n.updated_at }))
 }
+
+/* ==========================================================================
+   § NOTAS DE MARCA
+   ========================================================================== */
+
+export interface NotaDeMarca {
+  id: string
+  body: string
+  updatedAt: string
+}
+
+export async function listarNotasDeMarca(clientId: string): Promise<NotaDeMarca | null> {
+  const supabase = await createClient()
+
+  const { data, error } = await supabase
+    .from('brand_notes')
+    .select('id, body, updated_at')
+    .eq('client_id', clientId)
+    .maybeSingle()
+
+  if (error) throw new Error(`No se pudo leer la nota de marca: ${error.message}`)
+  if (!data) return null
+
+  return { id: data.id, body: data.body, updatedAt: data.updated_at }
+}
