@@ -16,6 +16,21 @@ description = "Supabase secret API key (sb_secret_...)"
 regex = '''sb_secret_[A-Za-z0-9_-]{20,}'''
 tags = ["supabase"]
 
+# El más peligroso de los tres y el que faltaba: un personal access token no
+# está limitado a un proyecto. Es la llave de la API de gestión de la CUENTA —
+# lista, crea y borra proyectos, lee su configuración y rota sus llaves. Un
+# `sb_secret_` filtrado compromete Studio OS; un `sbp_` filtrado compromete
+# todo lo que haya en esa cuenta de Supabase.
+#
+# Se agregó después de que uno se pegó por error en un chat. No vive en ningún
+# archivo del proyecto y no debería: el CLI lo guarda en ~/.supabase tras
+# `supabase login`.
+[[rules]]
+id = "supabase-personal-access-token"
+description = "Supabase personal access token (sbp_...) — API de gestión de la cuenta completa"
+regex = '''sbp_[A-Za-z0-9]{40,}'''
+tags = ["supabase", "critical"]
+
 [[rules]]
 id = "anthropic-api-key"
 description = "Anthropic API key"
