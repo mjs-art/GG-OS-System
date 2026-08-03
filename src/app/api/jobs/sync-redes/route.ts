@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
-import { ACTORES, crearClienteApify } from '@/lib/apis/apify'
 import { crearClienteInstagram } from '@/lib/apis/instagram'
+import { sincronizarCuentasApify } from '@/lib/apis/redes-sync'
 import { serverEnv } from '@/lib/env'
 import { createClient } from '@/lib/supabase/server'
 import { systemClock } from '@/lib/time'
@@ -51,95 +51,22 @@ export async function POST(request: Request): Promise<Response> {
 
   // Apify primero — no necesita verificación de Meta
   if (env.APIFY_API_TOKEN) {
-    const apify = crearClienteApify(env.APIFY_API_TOKEN)
-
-    for (const cuenta of cuentas) {
-      const handle = cuenta.handle?.replace(/^@/, '') ?? ''
-      if (!handle) {
-        fallos.push(cuenta.id)
-        continue
-      }
-
-      const resultados = await apify.ejecutar(ACTORES.instagram, {
-        usernames: [handle],
-        resultsLimit: 20,
-      })
-
-      if (!resultados || resultados.length === 0) {
-        fallos.push(cuenta.id)
-        continue
-      }
-
-      const posts = resultados as Array<{
-        timestamp?: string
-        likesCount?: number
-        commentsCount?: number
-      }>
-
-      const ahora = systemClock.now()
-      const semanaMs = 7 * 24 * 60 * 60 * 1000
-      const postsEstaSemana = posts.filter((p) => {
-        if (!p.timestamp) return false
-        return ahora.getTime() - new Date(p.timestamp).getTime() <= semanaMs
-      }).length
-
-      const ultimoPost = posts.reduce<(typeof posts)[0] | null>((a, b) => {
-        if (!a?.timestamp) return b
-        if (!b.timestamp) return a
-        return b.timestamp > a.timestamp ? b : a
-      }, null)
-
-      // Seguidores vienen del Profile Scraper, no del post scraper.
-      // Por ahora, si solo tenemos el post scraper, los seguidores se mantienen.
-      const { error } = await supabase
-        .from('social_accounts')
-        .update({
-          last_post_at: ultimoPost?.timestamp ?? null,
-          posts_per_week: postsEstaSemana,
-          checked_at: ahora.toISOString(),
-          // Scrape público: sin reach ni impresiones. El Analista lo distingue
-          // del dato oficial de Meta por esta marca de procedencia.
-          source: 'apify',
-        })
-        .eq('id', cuenta.id)
-
-      if (error) {
-        fallos.push(cuenta.id)
-        console.warn(`Apify · no se pudo actualizar ${cuenta.id}: ${error.message}`)
-      } else {
-        actualizadas.push(cuenta.id)
-      }
-    }
-
-    // También jalar seguidores si hay Profile Scraper
-    for (const cuenta of cuentas) {
-      const handle = cuenta.handle?.replace(/^@/, '') ?? ''
-      if (!handle) continue
-
-      const perfil = await apify.ejecutar(ACTORES.instagramPerfil, {
-        usernames: [handle],
-      })
-
-      if (!perfil || perfil.length === 0) continue
-
-      const datos = perfil[0] as { followersCount?: number }
-      if (datos.followersCount) {
-        await supabase
-          .from('social_accounts')
-          .update({ followers: datos.followersCount, source: 'apify' })
-          .eq('id', cuenta.id)
-      }
-    }
+    const { actualizadas: ok, fallos: mal } = await sincronizarCuentasApify({
+      supabase,
+      apifyToken: env.APIFY_API_TOKEN,
+      cuentas: cuentas.map((c) => ({ id: c.id, handle: c.handle })),
+      ahora: systemClock.now(),
+    })
 
     return NextResponse.json({
       ok: true,
       origen: 'apify',
-      actualizadas: actualizadas.length,
-      fallos: fallos.length,
+      actualizadas: ok.length,
+      fallos: mal.length,
       message:
-        fallos.length > 0
-          ? `${actualizadas.length} cuentas actualizadas vía Apify, ${fallos.length} fallaron.`
-          : `${actualizadas.length} cuentas actualizadas vía Apify.`,
+        mal.length > 0
+          ? `${ok.length} cuentas actualizadas vía Apify, ${mal.length} fallaron.`
+          : `${ok.length} cuentas actualizadas vía Apify.`,
     })
   }
 

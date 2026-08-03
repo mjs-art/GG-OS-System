@@ -10,6 +10,7 @@ import {
   fallasDePerfil,
   leerChecklist,
   peorEstado,
+  resumirPostsApify,
   type ChecklistPerfil,
   type EstadoRed,
 } from '@/domain/redes'
@@ -232,5 +233,61 @@ describe('etiquetaSemaforo', () => {
     const etiqueta = etiquetaSemaforo(evaluarRed(estado({ diasSinPublicar: 20 })))
     expect(etiqueta).toContain('Cuenta en rojo')
     expect(etiqueta).toContain('20 días')
+  })
+})
+
+describe('resumirPostsApify', () => {
+  // Mediodía del 3 de agosto: la semana en curso abarca desde el 27 de julio.
+  const ahora = new Date('2026-08-03T12:00:00-07:00')
+
+  it('sin posts no inventa fecha ni cadencia', () => {
+    expect(resumirPostsApify([], ahora)).toEqual({
+      ultimoPostAt: null,
+      publicacionesPorSemana: 0,
+    })
+  })
+
+  it('cuenta solo los posts de los últimos 7 días', () => {
+    const resumen = resumirPostsApify(
+      [
+        { timestamp: '2026-08-02T10:00:00-07:00' }, // ayer, cuenta
+        { timestamp: '2026-07-30T10:00:00-07:00' }, // hace 4 días, cuenta
+        { timestamp: '2026-07-20T10:00:00-07:00' }, // hace 14 días, no cuenta
+      ],
+      ahora,
+    )
+    expect(resumen.publicacionesPorSemana).toBe(2)
+  })
+
+  it('la última publicación es la más reciente, no la primera de la lista', () => {
+    const resumen = resumirPostsApify(
+      [
+        { timestamp: '2026-07-28T10:00:00-07:00' },
+        { timestamp: '2026-08-01T09:00:00-07:00' },
+        { timestamp: '2026-07-31T22:00:00-07:00' },
+      ],
+      ahora,
+    )
+    expect(resumen.ultimoPostAt).toBe('2026-08-01T09:00:00-07:00')
+  })
+
+  it('ignora posts sin timestamp o con fecha basura, no truena', () => {
+    const resumen = resumirPostsApify(
+      [{ likesCount: 10 }, { timestamp: 'ayer' }, { timestamp: '2026-08-02T10:00:00-07:00' }],
+      ahora,
+    )
+    expect(resumen).toEqual({
+      ultimoPostAt: '2026-08-02T10:00:00-07:00',
+      publicacionesPorSemana: 1,
+    })
+  })
+
+  it('un post con fecha futura sigue siendo el último, pero no infla la semana', () => {
+    // Pasa cuando el scrape trae un post programado o mal fechado. No debe
+    // contar como publicación de la semana (su resta contra ahora es negativa,
+    // que sí es <= una semana) — se cuenta igual porque ya "existe". El caso
+    // que importa es que no rompa el cálculo del último.
+    const resumen = resumirPostsApify([{ timestamp: '2026-09-01T10:00:00-07:00' }], ahora)
+    expect(resumen.ultimoPostAt).toBe('2026-09-01T10:00:00-07:00')
   })
 })

@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 import { crearClienteInstagram } from '@/lib/apis/instagram'
+import { sincronizarCuentasApify } from '@/lib/apis/redes-sync'
 import { codeRuleParams, ruleSeverity } from '@/domain/brand-rules'
 import { serverEnv } from '@/lib/env'
 import { createClient, requireUser } from '@/lib/supabase/server'
@@ -111,12 +112,13 @@ export async function auditarCuentas(input: unknown): Promise<ResultadoAuditoria
 }
 
 /**
- * Sincroniza los datos de Instagram desde la API: seguidores, último post,
- * publicaciones de la semana.
+ * Sincroniza los datos de Instagram: seguidores, último post, cadencia.
  *
- * Si el token no está configurado, el mensaje lo dice y la app sigue
- * funcionando con captura manual. Esa es la diferencia entre una feature que
- * no sirve y una que todavía no se enchufa.
+ * Apify primero —es la fuente principal y no pide verificación de Meta— y el
+ * Graph API oficial como respaldo cuando algún día Meta apruebe la app. Sin
+ * ninguno configurado, el mensaje lo dice y la app sigue con captura manual.
+ * Esa es la diferencia entre una feature que no sirve y una que todavía no se
+ * enchufa.
  */
 export async function sincronizarRedes(
   input: unknown,
@@ -130,21 +132,12 @@ export async function sincronizarRedes(
     }
   }
 
-  const token = serverEnv().INSTAGRAM_LONG_LIVED_TOKEN
-  if (!token) {
-    return {
-      status: 'ok',
-      message:
-        'Instagram Graph API no está configurada todavía. Las métricas se capturan a mano por ahora.',
-      revisadas: [],
-    }
-  }
-
+  const env = serverEnv()
   const supabase = await createClient()
 
   const { data: cuentas } = await supabase
     .from('social_accounts')
-    .select('id, platform')
+    .select('id, handle')
     .eq('client_id', parsed.data.clientId)
     .eq('platform', 'instagram')
 
@@ -152,6 +145,45 @@ export async function sincronizarRedes(
     return {
       status: 'error',
       message: 'El cliente no tiene cuentas de Instagram registradas.',
+      revisadas: [],
+    }
+  }
+
+  const ahora = systemClock.now()
+
+  // Apify primero.
+  if (env.APIFY_API_TOKEN) {
+    const { actualizadas } = await sincronizarCuentasApify({
+      supabase,
+      apifyToken: env.APIFY_API_TOKEN,
+      cuentas: cuentas.map((c) => ({ id: c.id, handle: c.handle })),
+      ahora,
+    })
+
+    if (actualizadas.length === 0) {
+      return {
+        status: 'error',
+        message:
+          'Apify no devolvió datos de ninguna cuenta. Revisa que los handles estén bien escritos y que las cuentas sean públicas.',
+        revisadas: [],
+      }
+    }
+
+    refrescarCliente(parsed.data.slug)
+    return {
+      status: 'ok',
+      message: `${actualizadas.length} ${actualizadas.length === 1 ? 'cuenta sincronizada' : 'cuentas sincronizadas'} desde Apify. Seguidores, última publicación y cadencia al día.`,
+      revisadas: actualizadas,
+    }
+  }
+
+  // Respaldo: Graph API oficial.
+  const token = env.INSTAGRAM_LONG_LIVED_TOKEN
+  if (!token) {
+    return {
+      status: 'ok',
+      message:
+        'Ni Apify ni Instagram Graph API están configurados todavía. Las métricas se capturan a mano por ahora.',
       revisadas: [],
     }
   }
@@ -168,7 +200,7 @@ export async function sincronizarRedes(
     }
   }
 
-  const ahora = systemClock.now().toISOString()
+  const cuando = ahora.toISOString()
   const revisadas: string[] = []
 
   for (const cuenta of cuentas) {
@@ -178,7 +210,8 @@ export async function sincronizarRedes(
         followers: frescos.followers,
         last_post_at: frescos.lastPostAt ?? null,
         posts_per_week: frescos.postsThisWeek,
-        checked_at: ahora,
+        checked_at: cuando,
+        source: 'api',
       })
       .eq('id', cuenta.id)
       .select('id')

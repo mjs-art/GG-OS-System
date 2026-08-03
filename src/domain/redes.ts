@@ -211,3 +211,60 @@ export function etiquetaSemaforo(veredicto: Veredicto): string {
   const prefijo = veredicto.estado === 'bad' ? 'Cuenta en rojo' : 'Cuenta en ámbar'
   return `${prefijo}: ${veredicto.razones.join(' ')}`
 }
+
+/* --- Resumen de un scrape de posts ----------------------------------------
+
+   De la lista de posts que devuelve un Actor de Apify, lo que § Redes necesita
+   son dos números: cuándo fue la última publicación y cuántas van esta semana.
+   Se vive aquí, puro y probado, porque la misma cuenta la calculan el job
+   `sync-redes` y el server action del botón — y antes de esto cada uno tenía su
+   propia copia, que es como los umbrales terminan corriéndose un día entre dos
+   lugares sin que nadie lo note.                                             */
+
+/** Lo que interesa de cada post scrapeado. El Actor devuelve mucho más. */
+export interface PostApify {
+  /** ISO 8601 en UTC (`...Z`). Puede faltar en un post que el scraper no leyó. */
+  timestamp?: string
+  likesCount?: number
+  commentsCount?: number
+}
+
+export interface ResumenPostsApify {
+  /** El post más reciente, o `null` si ninguno trae fecha. */
+  ultimoPostAt: string | null
+  /** Publicaciones en los últimos 7 días: la cadencia de la semana en curso. */
+  publicacionesPorSemana: number
+}
+
+const SEMANA_MS = 7 * 24 * 60 * 60 * 1000
+
+/**
+ * Resume los posts de un scrape en la última fecha y la cadencia de la semana.
+ *
+ * `ahora` entra por parámetro, no se lee adentro: sin eso la función deja de
+ * ser determinista y la prueba no podría fijar el borde exacto de los 7 días.
+ *
+ * La comparación de la fecha más reciente es de strings a propósito: los
+ * timestamps de Apify son ISO en UTC, y ahí el orden lexicográfico es el orden
+ * cronológico. El conteo sí parsea, porque necesita restar contra `ahora`.
+ */
+export function resumirPostsApify(posts: readonly PostApify[], ahora: Date): ResumenPostsApify {
+  let ultimoPostAt: string | null = null
+  let publicacionesPorSemana = 0
+
+  for (const post of posts) {
+    if (!post.timestamp) continue
+
+    const fecha = new Date(post.timestamp)
+    if (Number.isNaN(fecha.getTime())) continue
+
+    if (ahora.getTime() - fecha.getTime() <= SEMANA_MS) {
+      publicacionesPorSemana++
+    }
+    if (ultimoPostAt === null || post.timestamp > ultimoPostAt) {
+      ultimoPostAt = post.timestamp
+    }
+  }
+
+  return { ultimoPostAt, publicacionesPorSemana }
+}
