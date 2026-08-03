@@ -1,7 +1,7 @@
 -- =============================================================================
 -- STUDIO OS · ESQUEMA COMPLETO
 --
--- Las 9 migraciones concatenadas en orden, para pegar en el editor SQL de
+-- Las 14 migraciones concatenadas en orden, para pegar en el editor SQL de
 -- Supabase cuando la CLI no esté disponible.
 --
 -- ESTO ES UN RESPALDO, NO LA FUENTE DE VERDAD.
@@ -2731,6 +2731,253 @@ comment on column public.pieces.asset_url is
 
 
 -- =============================================================================
+-- 20260804000012_ver_como_post.sql
+-- =============================================================================
+
+-- =============================================================================
+-- 0012 · "Ver como post": la identidad pública de la cuenta.
+--
+-- La imagen de la pieza ya vive en el bucket `piezas` (migración 0011). Lo que
+-- faltaba para pintar una pieza como una publicación de Instagram —en el drawer
+-- del estudio y en el portal del cliente— es la identidad de la cuenta que va
+-- en el header del post: la foto de perfil y la bio.
+--
+-- Van en `clients` y NO en `social_accounts`. El portal ya lee `clients` (su
+-- política `clients: el portal ve solo su cliente`), mientras que
+-- `social_accounts` es studio-only y carga maquinaria —seguidores, DMs sin
+-- responder, checklist de perfil— que el cliente nunca debe ver. avatar y bio
+-- son la cara pública de la marca, no maquinaria, así que su hogar es `clients`
+-- y ahí respetan la regla de "el cliente nunca ve la maquinaria".
+-- =============================================================================
+
+alter table public.clients
+  add column avatar_url text check (avatar_url is null or avatar_url ~ '^https?://'),
+  add column bio        text check (bio is null or length(bio) <= 300);
+
+
+-- =============================================================================
+-- 20260805000012_sembrar_agent_policies.sql
+-- =============================================================================
+
+-- =============================================================================
+-- 0012 · Sembrar las agent_policies al dar de alta un cliente.
+--
+-- Un cliente sin renglón de política por agente es un cliente roto: el switch
+-- de "encender agente" hace un UPDATE que afecta cero renglones y regresa en
+-- silencio (Postgres no lanza error con un UPDATE filtrado por RLS). El seed lo
+-- resolvía a mano con un `unnest(enum_range(...))`; en producción no hay seed.
+--
+-- Por qué un trigger y no TypeScript: `agent_policies` solo deja INSERTAR al
+-- owner (agents.sql). El alta de clientes la puede hacer cualquier miembro del
+-- estudio, así que sembrar las policies desde la sesión fallaría para un staff.
+-- Meterlo por el cliente admin en una ruta de usuario está prohibido (ESLint).
+-- La regla vive donde debe: en la base. La función es SECURITY DEFINER —dueño
+-- `postgres`, que saltea RLS y FORCE igual que el resto de funciones de `app`—
+-- así que siembra sin depender del rol de quien insertó el cliente.
+-- =============================================================================
+
+create or replace function app.seed_agent_policies()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  -- Las ocho, APAGADAS y con el tope por default (500¢). Encender cada una es
+  -- una decisión consciente y aparte, exactamente como en el seed.
+  insert into public.agent_policies (org_id, client_id, agent, enabled, monthly_cap_cents)
+  select new.org_id, new.id, a, false, 500
+  from unnest(enum_range(null::app.agent_key)) as a
+  on conflict (client_id, agent) do nothing;
+
+  return new;
+end;
+$$;
+
+create trigger clients_seed_agent_policies
+  after insert on public.clients
+  for each row execute function app.seed_agent_policies();
+
+
+-- =============================================================================
+-- 20260806000013_referencias_y_editar_reglas.sql
+-- =============================================================================
+
+-- =============================================================================
+-- 0013 · Notas de marca y edición de reglas.
+--
+-- Agrega un bloque de texto libre para referencias, briefs, notas de marca
+-- que el equipo comparte. Visibilidad del estudio, no del portal.
+-- =============================================================================
+
+create table public.brand_notes (
+  id          uuid primary key default gen_random_uuid(),
+  org_id      uuid not null references public.orgs (id) on delete cascade,
+  client_id   uuid not null references public.clients (id) on delete cascade,
+  body        text not null default '',
+  created_at  timestamptz not null default now(),
+  updated_at  timestamptz not null default now()
+);
+
+create index brand_notes_client_idx on public.brand_notes (client_id);
+
+alter table public.brand_notes enable row level security;
+alter table public.brand_notes force row level security;
+
+create policy "brand_notes: solo el estudio"
+  on public.brand_notes for all to authenticated
+  using (app.is_staff_of_client(client_id))
+  with check (app.is_staff_of_client(client_id));
+
+grant select, insert, update, delete on public.brand_notes to authenticated;
+
+create trigger brand_notes_touch before update on public.brand_notes
+  for each row execute function app.touch_updated_at();
+create trigger brand_notes_org_guard before insert or update on public.brand_notes
+  for each row execute function app.enforce_client_org();
+
+
+-- =============================================================================
+-- 20260807000014_org_invites.sql
+-- =============================================================================
+
+-- =============================================================================
+-- 0014 · Invitar gente al equipo del estudio.
+--
+-- org_members es 100% alta manual: no hay trigger sobre auth.users, ni
+-- invitación por correo. Hoy eso significa que una cuenta nueva —o migrada—
+-- se autentica bien y ve la app completamente vacía, porque RLS filtra en
+-- silencio a quien no tiene fila en org_members. Esta migración agrega el
+-- paso que faltaba: el owner invita por correo, y en cuanto esa persona
+-- entra (o ya tenía sesión y recarga), su invitación pendiente se convierte
+-- en membership sola.
+-- =============================================================================
+
+create table public.org_invites (
+  id          uuid primary key default gen_random_uuid(),
+  org_id      uuid not null references public.orgs (id) on delete cascade,
+  email       extensions.citext not null,
+  role        app.member_role not null default 'staff',
+  invited_by  uuid references auth.users (id) on delete set null,
+  created_at  timestamptz not null default now(),
+  -- Aceptar es poner fecha, no borrar: mismo criterio que client_users.revoked_at.
+  accepted_at timestamptz
+);
+
+-- Como mucho una invitación pendiente por correo y por org; una vez aceptada
+-- el correo se puede volver a invitar sin chocar con la fila vieja.
+create unique index org_invites_pending_idx on public.org_invites (org_id, email)
+  where accepted_at is null;
+
+create index org_invites_email_idx on public.org_invites (email) where accepted_at is null;
+
+alter table public.org_invites enable row level security;
+alter table public.org_invites force row level security;
+
+-- Mismo criterio que org_members: solo el owner administra a quién invita.
+create policy "org_invites: solo el owner administra"
+  on public.org_invites for all to authenticated
+  using (app.is_org_owner(org_id))
+  with check (app.is_org_owner(org_id));
+
+grant select, insert, update, delete on public.org_invites to authenticated;
+
+-- =============================================================================
+-- Aceptar invitaciones pendientes.
+--
+-- Corre SECURITY DEFINER porque tiene que escribir en org_members, y un
+-- usuario recién invitado todavía no es miembro de nada — no hay política que
+-- se lo permita directo. Se cruza contra el correo verificado del JWT, igual
+-- que app.portal_client_ids(): Supabase solo emite sesión después de que la
+-- persona abrió el link en ESE buzón.
+-- =============================================================================
+create or replace function app.accept_pending_invites()
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_uid   uuid := (select auth.uid());
+  v_email extensions.citext := ((select auth.jwt()) ->> 'email')::extensions.citext;
+begin
+  if v_uid is null or v_email is null then
+    return;
+  end if;
+
+  insert into public.org_members (org_id, user_id, role)
+  select i.org_id, v_uid, i.role
+  from public.org_invites i
+  where i.email = v_email
+    and i.accepted_at is null
+  on conflict (org_id, user_id) do nothing;
+
+  update public.org_invites
+  set accepted_at = now()
+  where email = v_email
+    and accepted_at is null;
+end;
+$$;
+
+comment on function app.accept_pending_invites() is
+  'Convierte en membership toda invitación pendiente que coincida con el correo del usuario logueado.';
+
+-- =============================================================================
+-- Envoltura pública: lo único que el Data API puede llamar.
+-- =============================================================================
+create or replace function public.accept_pending_invites()
+returns void
+language sql
+security invoker
+set search_path = ''
+as $$
+  select app.accept_pending_invites();
+$$;
+
+revoke all on function
+  app.accept_pending_invites(),
+  public.accept_pending_invites()
+from public, anon;
+
+grant execute on function app.accept_pending_invites() to authenticated, service_role;
+grant execute on function public.accept_pending_invites() to authenticated, service_role;
+
+
+-- =============================================================================
+-- 20260807000015_procedencia_redes.sql
+-- =============================================================================
+
+-- Procedencia del dato de redes.
+--
+-- Con la verificación de negocio de Meta a semanas de trámite por cliente, el
+-- scrape vía Apify es la fuente PRINCIPAL para estas cuentas, no un respaldo.
+-- Y un seguidor scrapeado no es el mismo dato que uno del Graph API oficial:
+-- Apify ve lo público (seguidores, cadencia, último post) y NUNCA los insights
+-- privados (reach, impresiones, saves). Si el Analista no distingue de dónde
+-- salió el número, mezcla dos cosas distintas sin saberlo — justo la trampa que
+-- ya advierte el CLAUDE.md ("el agente no distingue de dónde vino el número").
+--
+-- Por eso 'apify' es un valor aparte de 'api', no un sinónimo: uno es scrape
+-- público, el otro es la métrica oficial de la plataforma. El día que el trámite
+-- con Meta cierre y entren los dos, hay que poder saber cuál estás viendo.
+
+alter type app.metric_source add value if not exists 'apify';
+
+-- social_accounts guarda el estado de la cuenta (seguidores, cadencia, último
+-- post) que llena `sync-redes`. Hasta hoy no registraba de dónde salió ese
+-- estado. Default 'manual' porque el arranque sigue siendo captura a mano; el
+-- job lo sube a 'apify' o 'api' cuando corre. No se referencia el valor nuevo
+-- aquí a propósito: usar un enum recién agregado en la misma transacción falla.
+alter table public.social_accounts
+  add column source app.metric_source not null default 'manual';
+
+comment on column public.social_accounts.source is
+  'De dónde salió el último refresco de esta cuenta: manual/csv (captura), api '
+  '(Graph oficial) o apify (scrape público, sin reach ni impresiones). El '
+  'Analista lo necesita para saber qué tan completo es cada número.';
+
+
+-- =============================================================================
 -- REGISTRO DE MIGRACIONES
 --
 -- Solo si aplicaste el archivo a mano. Le dice a la CLI que estas versiones ya
@@ -2746,5 +2993,10 @@ insert into supabase_migrations.schema_migrations (version) values
   ('20260801000006'),
   ('20260802000007'),
   ('20260803000010'),
-  ('20260804000011')
+  ('20260804000011'),
+  ('20260804000012'),
+  ('20260805000012'),
+  ('20260806000013'),
+  ('20260807000014'),
+  ('20260807000015')
 on conflict (version) do nothing;

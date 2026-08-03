@@ -43,7 +43,11 @@ export interface MetricasMes {
   seguidoresNuevos: number
   visitasPerfil: number
   clicsLink: number
-  origen: 'manual' | 'csv' | 'api'
+  // Comparte el enum `metric_source` con el resto de la app. En la práctica un
+  // total mensual no llega por 'apify': el scrape no ve reach ni impresiones,
+  // que son la mitad de este renglón. Pero el tipo lo admite porque la columna
+  // lo admite; no se estrecha a mano para no mentirle a TypeScript.
+  origen: 'manual' | 'csv' | 'api' | 'apify'
 }
 
 /* -------------------------------------------------------------------------- */
@@ -114,7 +118,7 @@ function aMetricas(fila: {
   new_followers: number
   profile_visits: number
   link_clicks: number
-  source: 'manual' | 'csv' | 'api'
+  source: 'manual' | 'csv' | 'api' | 'apify'
 }): MetricasMes {
   return {
     mes: fila.month as MonthKey,

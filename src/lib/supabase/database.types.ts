@@ -1817,7 +1817,7 @@ export type Database = {
           reach: number
           saves: number
           shares: number
-          source: "manual" | "csv" | "api"
+          source: "manual" | "csv" | "api" | "apify"
           updated_at: string
         }
         Insert: {
@@ -1834,7 +1834,7 @@ export type Database = {
           reach?: number
           saves?: number
           shares?: number
-          source?: "manual" | "csv" | "api"
+          source?: "manual" | "csv" | "api" | "apify"
           updated_at?: string
         }
         Update: {
@@ -1851,7 +1851,7 @@ export type Database = {
           reach?: number
           saves?: number
           shares?: number
-          source?: "manual" | "csv" | "api"
+          source?: "manual" | "csv" | "api" | "apify"
           updated_at?: string
         }
         Relationships: [
@@ -2029,6 +2029,7 @@ export type Database = {
           platform: "instagram" | "facebook" | "tiktok" | "linkedin"
           posts_per_week: number
           profile_checklist: Json
+          source: "manual" | "csv" | "api" | "apify"
           target_per_week: number
           unanswered_comments: number
           unanswered_dms: number
@@ -2048,6 +2049,7 @@ export type Database = {
           platform: "instagram" | "facebook" | "tiktok" | "linkedin"
           posts_per_week?: number
           profile_checklist?: Json
+          source?: "manual" | "csv" | "api" | "apify"
           target_per_week?: number
           unanswered_comments?: number
           unanswered_dms?: number
@@ -2067,6 +2069,7 @@ export type Database = {
           platform?: "instagram" | "facebook" | "tiktok" | "linkedin"
           posts_per_week?: number
           profile_checklist?: Json
+          source?: "manual" | "csv" | "api" | "apify"
           target_per_week?: number
           unanswered_comments?: number
           unanswered_dms?: number

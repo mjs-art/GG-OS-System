@@ -97,6 +97,9 @@ export async function POST(request: Request): Promise<Response> {
           last_post_at: ultimoPost?.timestamp ?? null,
           posts_per_week: postsEstaSemana,
           checked_at: ahora.toISOString(),
+          // Scrape público: sin reach ni impresiones. El Analista lo distingue
+          // del dato oficial de Meta por esta marca de procedencia.
+          source: 'apify',
         })
         .eq('id', cuenta.id)
 
@@ -123,7 +126,7 @@ export async function POST(request: Request): Promise<Response> {
       if (datos.followersCount) {
         await supabase
           .from('social_accounts')
-          .update({ followers: datos.followersCount })
+          .update({ followers: datos.followersCount, source: 'apify' })
           .eq('id', cuenta.id)
       }
     }
@@ -170,6 +173,8 @@ export async function POST(request: Request): Promise<Response> {
         last_post_at: frescos.lastPostAt ?? null,
         posts_per_week: frescos.postsThisWeek,
         checked_at: systemClock.now().toISOString(),
+        // Graph API oficial: sí trae insights privados. 'api', no 'apify'.
+        source: 'api',
       })
       .eq('id', cuenta.id)
 

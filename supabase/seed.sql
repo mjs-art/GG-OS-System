@@ -249,26 +249,30 @@ on conflict do nothing;
 -- --- Redes ---------------------------------------------------------------------
 -- El checklist de perfil se guarda incompleto a propósito: así el semáforo del
 -- Auditor tiene algo que señalar desde el primer arranque.
+-- El `source` refleja la etapa real: Instagram y TikTok entran por scrape de
+-- Apify (no piden verificación de Meta), y Facebook sigue a mano porque su
+-- conexión es la que más trámite lleva. Así el semáforo de procedencia tiene
+-- las tres fuentes desde el primer arranque.
 insert into public.social_accounts (
   org_id, client_id, platform, handle, url, followers, followers_delta,
   last_post_at, profile_checklist, unanswered_dms, unanswered_comments,
-  posts_per_week, target_per_week, checked_at
+  posts_per_week, target_per_week, checked_at, source
 ) values
   ('aaaaaaaa-0000-4000-8000-000000000001', 'cccccccc-0000-4000-8000-000000000001',
    'instagram', '@barficticio', 'https://instagram.com/barficticio',
    8420, 180, '2026-07-31 21:10:00-07',
    '{"bio": true, "link": true, "highlights": false, "foto": true}'::jsonb,
-   12, 7, 4.5, 5, '2026-08-01 09:00:00-07'),
+   12, 7, 4.5, 5, '2026-08-01 09:00:00-07', 'apify'),
   ('aaaaaaaa-0000-4000-8000-000000000001', 'cccccccc-0000-4000-8000-000000000001',
    'facebook', 'barficticio', 'https://facebook.com/barficticio',
    3110, -24, '2026-07-26 18:00:00-07',
    '{"bio": true, "link": false, "highlights": false, "foto": true}'::jsonb,
-   3, 1, 1.5, 3, '2026-08-01 09:00:00-07'),
+   3, 1, 1.5, 3, '2026-08-01 09:00:00-07', 'manual'),
   ('aaaaaaaa-0000-4000-8000-000000000001', 'cccccccc-0000-4000-8000-000000000001',
    'tiktok', '@barficticio', 'https://tiktok.com/@barficticio',
    1980, 640, '2026-07-30 22:40:00-07',
    '{"bio": true, "link": true, "highlights": true, "foto": false}'::jsonb,
-   21, 15, 3, 3, '2026-08-01 09:00:00-07')
+   21, 15, 3, 3, '2026-08-01 09:00:00-07', 'apify')
 on conflict (client_id, platform) do nothing;
 
 -- --- Resultados -------------------------------------------------------------------
