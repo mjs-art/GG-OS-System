@@ -22,6 +22,7 @@ export interface Seccion {
 export const SECCIONES: readonly Seccion[] = [
   { id: 'resumen', label: 'Resumen' },
   { id: 'redes', label: 'Redes' },
+  { id: 'referencias', label: 'Referencias' },
   { id: 'volumen', label: 'Volumen' },
   { id: 'planner', label: 'Planner' },
   { id: 'calendario', label: 'Calendario' },

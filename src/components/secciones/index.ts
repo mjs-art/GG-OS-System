@@ -9,6 +9,7 @@
  */
 
 export { SeccionRedes } from './seccion-redes'
+export { SeccionReferencias } from './seccion-referencias'
 export { SeccionMarca } from './seccion-marca'
 export { SeccionArchivos } from './seccion-archivos'
 export { SeccionPendientes } from './seccion-pendientes'

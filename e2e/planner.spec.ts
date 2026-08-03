@@ -9,7 +9,7 @@ import { expect, test } from '@playwright/test'
  * y por lo tanto rojo para siempre — peor que no tener prueba, porque una
  * suite con un rojo permanente enseña a ignorar los rojos.
  *
- * OJO CON EL ALCANCE. Esto verifica que las trece secciones MONTAN con datos
+ * OJO CON EL ALCANCE. Esto verifica que las catorce secciones MONTAN con datos
  * reales y sin errores de servidor ni de hidratación. Eso es mucho: si una
  * sola revienta, se cae la página entera.
  *
@@ -37,11 +37,12 @@ test('todas las secciones del cliente cargan sin reventar', async ({ page }, inf
   await page.goto('/cliente/bar-ficticio?mes=2026-09')
   await page.waitForLoadState('networkidle')
 
-  // Las trece secciones se montan en la misma página larga. Si una tumba el
+  // Las catorce secciones se montan en la misma página larga. Si una tumba el
   // render del servidor, se cae toda — por eso vale afirmarlas juntas.
   for (const s of [
     'Resumen',
     'Redes',
+    'Referencias',
     'Volumen',
     'Planner',
     'Calendario',

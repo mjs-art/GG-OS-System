@@ -1,6 +1,12 @@
 import 'server-only'
 
 import { resumirPostsApify, type PostApify } from '@/domain/redes'
+import {
+  mejoresPosts,
+  TOP_POSTS_POR_CUENTA,
+  type PostScrape,
+  type TopPost,
+} from '@/domain/referencias'
 import type { createClient } from '@/lib/supabase/server'
 import { ACTORES, crearClienteApify } from './apify'
 
@@ -94,6 +100,82 @@ export async function sincronizarCuentasApify(opts: {
         .from('social_accounts')
         .update({ followers: datos.followersCount, source: 'apify' })
         .eq('id', cuenta.id)
+    }
+
+    actualizadas.push(cuenta.id)
+  }
+
+  return { actualizadas, fallos }
+}
+
+/**
+ * Igual que arriba, pero para cuentas de referencia (competencia / inspiración).
+ *
+ * Guarda lo mismo —seguidores, cadencia, último post— más un snapshot de los
+ * posts con más engagement para el panel de inspiración. Ese snapshot se
+ * reemplaza completo cada corrida: es una foto de "qué están haciendo ahora",
+ * no un histórico.
+ */
+export async function sincronizarReferenciasApify(opts: {
+  supabase: SupabaseServer
+  apifyToken: string
+  cuentas: readonly CuentaParaSync[]
+  ahora: Date
+}): Promise<ResultadoSync> {
+  const { supabase, apifyToken, cuentas, ahora } = opts
+  const apify = crearClienteApify(apifyToken)
+
+  const actualizadas: string[] = []
+  const fallos: string[] = []
+
+  for (const cuenta of cuentas) {
+    const handle = cuenta.handle?.replace(/^@/, '') ?? ''
+    if (!handle) {
+      fallos.push(cuenta.id)
+      continue
+    }
+
+    const posts = await apify.ejecutar(ACTORES.instagram, {
+      usernames: [handle],
+      resultsLimit: 20,
+    })
+
+    if (!posts || posts.length === 0) {
+      fallos.push(cuenta.id)
+      continue
+    }
+
+    const resumen = resumirPostsApify(posts as PostApify[], ahora)
+    const top = mejoresPosts(posts as PostScrape[], TOP_POSTS_POR_CUENTA)
+
+    const perfil = await apify.ejecutar(ACTORES.instagramPerfil, { usernames: [handle] })
+    const datos = perfil?.[0] as { followersCount?: number } | undefined
+
+    const cambios: {
+      last_post_at: string | null
+      posts_per_week: number
+      top_posts: TopPost[]
+      checked_at: string
+      source: 'apify'
+      followers?: number
+    } = {
+      last_post_at: resumen.ultimoPostAt,
+      posts_per_week: resumen.publicacionesPorSemana,
+      top_posts: top,
+      checked_at: ahora.toISOString(),
+      source: 'apify',
+    }
+    if (datos?.followersCount) cambios.followers = datos.followersCount
+
+    const { error, data } = await supabase
+      .from('reference_accounts')
+      .update(cambios)
+      .eq('id', cuenta.id)
+      .select('id')
+
+    if (error || (data ?? []).length === 0) {
+      fallos.push(cuenta.id)
+      continue
     }
 
     actualizadas.push(cuenta.id)

@@ -15,6 +15,7 @@ import {
   SeccionPendientes,
   SeccionPrivado,
   SeccionRedes,
+  SeccionReferencias,
 } from '@/components/secciones'
 import { SeccionVolumen } from '@/components/volumen/seccion-volumen'
 import { fechaLocal } from '@/domain/calendario'
@@ -24,6 +25,7 @@ import { listarPiezas, listarStories, mesActual, obtenerCliente } from '@/lib/da
 import { listarFechasClave } from '@/lib/datos/fechas'
 import { listarGuiones, listarTendencias } from '@/lib/datos/guiones'
 import { datosPauta } from '@/lib/datos/pauta'
+import { listarReferencias } from '@/lib/datos/referencias'
 import {
   aprendizajeDeMarca,
   historialDeMarca,
@@ -78,6 +80,7 @@ export default async function ClientePage({ params, searchParams }: Props) {
     stories,
     entradasCalendario,
     redes,
+    referencias,
     guiones,
     tendencias,
     fechas,
@@ -96,6 +99,7 @@ export default async function ClientePage({ params, searchParams }: Props) {
     listarStories(cliente.id, mes),
     entradasDelMes({ mes, clientId: cliente.id }),
     listarRedes(cliente.id),
+    listarReferencias(cliente.id),
     listarGuiones(cliente.id),
     listarTendencias(),
     listarFechasClave(cliente.id, mes),
@@ -139,6 +143,18 @@ export default async function ClientePage({ params, searchParams }: Props) {
                   clientId={cliente.id}
                   slug={cliente.slug}
                   cuentas={redes}
+                  ahora={ahora}
+                />
+              )}
+              {id === 'referencias' && (
+                <SeccionReferencias
+                  clientId={cliente.id}
+                  orgId={cliente.orgId}
+                  slug={cliente.slug}
+                  cuentas={referencias}
+                  seguidoresCliente={
+                    redes.find((r) => r.platform === 'instagram')?.followers ?? null
+                  }
                   ahora={ahora}
                 />
               )}

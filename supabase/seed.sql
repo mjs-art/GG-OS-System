@@ -275,6 +275,33 @@ insert into public.social_accounts (
    21, 15, 3, 3, '2026-08-01 09:00:00-07', 'apify')
 on conflict (client_id, platform) do nothing;
 
+-- --- Referencias: la competencia y la inspiración ---------------------------------
+-- Datos ficticios. El competidor tiene más seguidores que el cliente a
+-- propósito: así la brecha se ve desde el primer arranque. Los top_posts son un
+-- snapshot de ejemplo, como el que dejaría un scrape de Apify.
+insert into public.reference_accounts (
+  org_id, client_id, platform, handle, url, label, kind,
+  followers, last_post_at, posts_per_week, top_posts, source, checked_at
+) values
+  ('aaaaaaaa-0000-4000-8000-000000000001', 'cccccccc-0000-4000-8000-000000000001',
+   'instagram', 'barrival', 'https://instagram.com/barrival',
+   'Competidor directo, misma colonia', 'competencia',
+   12400, '2026-08-01 20:30:00-07', 6,
+   '[
+     {"caption": "2x1 en mezcales todos los martes", "likes": 1840, "comments": 96, "url": "https://instagram.com/p/ejemplo1", "at": "2026-08-01T20:30:00-07:00"},
+     {"caption": "Detrás de la barra con el mixólogo", "likes": 1210, "comments": 54, "url": "https://instagram.com/p/ejemplo2", "at": "2026-07-30T19:00:00-07:00"}
+   ]'::jsonb,
+   'apify', '2026-08-02 09:00:00-07'),
+  ('aaaaaaaa-0000-4000-8000-000000000001', 'cccccccc-0000-4000-8000-000000000001',
+   'instagram', 'coctel_inspo', 'https://instagram.com/coctel_inspo',
+   'Coctelería que nos encanta', 'inspiracion',
+   89000, '2026-08-02 18:00:00-07', 5,
+   '[
+     {"caption": "El truco para un clarified milk punch en casa", "likes": 15400, "comments": 620, "url": "https://instagram.com/p/ejemplo3", "at": "2026-08-02T18:00:00-07:00"}
+   ]'::jsonb,
+   'apify', '2026-08-02 09:00:00-07')
+on conflict (client_id, platform, handle) do nothing;
+
 -- --- Resultados -------------------------------------------------------------------
 insert into public.results_monthly (
   org_id, client_id, month, reach, impressions, saves, shares,

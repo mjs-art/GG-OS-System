@@ -1802,6 +1802,78 @@ export type Database = {
           },
         ]
       }
+      reference_accounts: {
+        Row: {
+          checked_at: string | null
+          client_id: string
+          created_at: string
+          followers: number
+          handle: string
+          id: string
+          kind: "competencia" | "inspiracion"
+          label: string | null
+          last_post_at: string | null
+          org_id: string
+          platform: "instagram" | "facebook" | "tiktok" | "linkedin"
+          posts_per_week: number
+          source: "manual" | "csv" | "api" | "apify"
+          top_posts: Json
+          updated_at: string
+          url: string | null
+        }
+        Insert: {
+          checked_at?: string | null
+          client_id: string
+          created_at?: string
+          followers?: number
+          handle: string
+          id?: string
+          kind?: "competencia" | "inspiracion"
+          label?: string | null
+          last_post_at?: string | null
+          org_id: string
+          platform: "instagram" | "facebook" | "tiktok" | "linkedin"
+          posts_per_week?: number
+          source?: "manual" | "csv" | "api" | "apify"
+          top_posts?: Json
+          updated_at?: string
+          url?: string | null
+        }
+        Update: {
+          checked_at?: string | null
+          client_id?: string
+          created_at?: string
+          followers?: number
+          handle?: string
+          id?: string
+          kind?: "competencia" | "inspiracion"
+          label?: string | null
+          last_post_at?: string | null
+          org_id?: string
+          platform?: "instagram" | "facebook" | "tiktok" | "linkedin"
+          posts_per_week?: number
+          source?: "manual" | "csv" | "api" | "apify"
+          top_posts?: Json
+          updated_at?: string
+          url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reference_accounts_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reference_accounts_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       results_monthly: {
         Row: {
           client_id: string
