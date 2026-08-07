@@ -1,6 +1,12 @@
 import 'server-only'
 
-import type { HiloWhatsApp, RetroWhatsApp, SalienteWhatsApp, TipoRetro } from '@/domain/whatsapp'
+import {
+  parsearMedia,
+  type HiloWhatsApp,
+  type RetroWhatsApp,
+  type SalienteWhatsApp,
+  type TipoRetro,
+} from '@/domain/whatsapp'
 import { esErrorDeSesion } from '@/lib/datos/errores'
 import { createClient } from '@/lib/supabase/server'
 
@@ -17,10 +23,6 @@ const ESTADOS_PENDIENTES = ['borrador', 'aprobado'] as const
 
 function esEstadoPendiente(valor: string): valor is 'borrador' | 'aprobado' {
   return (ESTADOS_PENDIENTES as readonly string[]).includes(valor)
-}
-
-function contarMedia(media: unknown): number {
-  return Array.isArray(media) ? media.length : 0
 }
 
 /**
@@ -108,7 +110,7 @@ export async function cargarSalientesWhatsApp(): Promise<HiloWhatsApp[]> {
       body: m.body,
       status: m.status,
       authoredByAgent: m.authored_by_agent,
-      mediaCount: contarMedia(m.media),
+      media: parsearMedia(m.media),
       createdAt: m.created_at,
     }
     hilo.salientes.push(saliente)

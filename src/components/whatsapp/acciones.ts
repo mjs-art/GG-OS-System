@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
-import { construirEnvioN8n } from '@/domain/whatsapp'
+import { construirEnvioN8n, parsearMedia, type MediaWhatsApp } from '@/domain/whatsapp'
 import { enviarPorN8n } from '@/lib/apis/whatsapp-n8n'
 import { serverEnv } from '@/lib/env'
 import { createClient } from '@/lib/supabase/server'
@@ -189,6 +189,108 @@ export async function registrarRetro(entrada: unknown): Promise<ResultadoWhatsAp
 
   revalidatePath('/whatsapp')
   return { ok: true }
+}
+
+/* ==========================================================================
+   ADJUNTOS — fotos y propuestas en el borrador de saliente
+   ========================================================================== */
+
+/** Tope de adjuntos por mensaje. WhatsApp no manda álbumes gigantes. */
+const MAX_ADJUNTOS = 10
+
+const adjuntarSchema = z.object({
+  messageId: z.uuid('No se identificó el mensaje. Recarga la bandeja.'),
+  url: z.url('Pega un link válido (empieza con http).'),
+  kind: z.enum(['image', 'video', 'audio', 'document']).default('image'),
+  caption: z.string().trim().max(200).nullish(),
+})
+
+/**
+ * Lee los adjuntos actuales de un borrador (solo lo que RLS deja ver y que aún
+ * no se ha enviado), aplica el cambio y los reescribe. Devuelve la lista nueva
+ * ya parseada, o un error humano.
+ */
+async function editarMedia(
+  messageId: string,
+  transformar: (media: MediaWhatsApp[]) => MediaWhatsApp[] | { error: string },
+): Promise<ResultadoWhatsApp> {
+  const supabase = await createClient()
+
+  const {
+    data: { user },
+    error: errorUsuario,
+  } = await supabase.auth.getUser()
+  if (errorUsuario || !user) {
+    return { ok: false, mensaje: 'Se cerró tu sesión. Vuelve a entrar y sigue donde ibas.' }
+  }
+
+  const { data: fila } = await supabase
+    .from('wa_messages')
+    .select('media')
+    .eq('id', messageId)
+    .eq('direction', 'outbound')
+    .in('status', ['borrador', 'aprobado'])
+    .is('sent_at', null)
+    .maybeSingle()
+  if (!fila) {
+    return { ok: false, mensaje: 'Ese borrador ya se envió, no existe, o no tienes acceso.' }
+  }
+
+  const siguiente = transformar(parsearMedia(fila.media))
+  if (!Array.isArray(siguiente)) return { ok: false, mensaje: siguiente.error }
+
+  const { data, error } = await supabase
+    .from('wa_messages')
+    .update({ media: siguiente })
+    .eq('id', messageId)
+    .eq('direction', 'outbound')
+    .in('status', ['borrador', 'aprobado'])
+    .is('sent_at', null)
+    .select('id')
+
+  if (error) return { ok: false, mensaje: `No se pudo guardar el adjunto: ${error.message}` }
+  if (!data || data.length === 0) {
+    return { ok: false, mensaje: 'Ese borrador ya se envió, no existe, o no tienes acceso.' }
+  }
+
+  revalidatePath('/whatsapp')
+  return { ok: true }
+}
+
+/** Adjunta una foto o propuesta (por link) al borrador. */
+export async function adjuntarMediaWhatsApp(entrada: unknown): Promise<ResultadoWhatsApp> {
+  const parsed = adjuntarSchema.safeParse(entrada)
+  if (!parsed.success) {
+    return { ok: false, mensaje: parsed.error.issues[0]?.message ?? 'Revisa el link.' }
+  }
+  const { messageId, url, kind, caption } = parsed.data
+
+  return editarMedia(messageId, (media) => {
+    if (media.length >= MAX_ADJUNTOS) {
+      return {
+        error: `Ya hay ${MAX_ADJUNTOS} adjuntos, que es el tope. Quita uno para agregar otro.`,
+      }
+    }
+    // El enlace se guarda tal cual: la miniatura de Drive es solo para mostrar.
+    // n8n necesita el original para bajar el archivo y mandarlo por Meta.
+    return [...media, { kind, url, ...(caption ? { caption } : {}) }]
+  })
+}
+
+/** Quita el adjunto en la posición dada del borrador. */
+export async function quitarMediaWhatsApp(entrada: unknown): Promise<ResultadoWhatsApp> {
+  const parsed = z
+    .object({ messageId: z.uuid(), index: z.number().int().min(0) })
+    .safeParse(entrada)
+  if (!parsed.success) {
+    return { ok: false, mensaje: 'No se identificó el adjunto. Recarga la bandeja.' }
+  }
+  const { messageId, index } = parsed.data
+
+  return editarMedia(messageId, (media) => {
+    if (index >= media.length) return { error: 'Ese adjunto ya no está. Recarga la bandeja.' }
+    return media.filter((_, i) => i !== index)
+  })
 }
 
 const resolverRetroSchema = z.object({

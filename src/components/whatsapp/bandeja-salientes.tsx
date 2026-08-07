@@ -1,8 +1,14 @@
 'use client'
 
+import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { useRef, useState, useTransition } from 'react'
-import { aprobarYEnviarWhatsApp, registrarRetro } from '@/components/whatsapp/acciones'
+import {
+  adjuntarMediaWhatsApp,
+  aprobarYEnviarWhatsApp,
+  quitarMediaWhatsApp,
+  registrarRetro,
+} from '@/components/whatsapp/acciones'
 import { RetroAbierta } from '@/components/whatsapp/retro-abierta'
 import {
   AreaTexto,
@@ -11,8 +17,10 @@ import {
   Chip,
   Display,
   EmptyState,
+  Entrada,
   Mono,
 } from '@/components/ui/primitives'
+import { urlMostrableDeEnlace } from '@/domain/drive'
 import type { HiloWhatsApp, RetroWhatsApp, SalienteWhatsApp } from '@/domain/whatsapp'
 import { relativeDays } from '@/lib/time'
 
@@ -77,12 +85,9 @@ export function BandejaSalientes({ hilos, ahora, retros }: BandejaSalientesProps
 
 function HiloTarjeta({ hilo, ahora }: { hilo: HiloWhatsApp; ahora: string }) {
   const router = useRouter()
-  const [enviando, setEnviando] = useState<string | null>(null)
-  const [aviso, setAviso] = useState<{ id: string; mensaje: string } | null>(null)
   const [retroEstado, setRetroEstado] = useState<'idle' | 'guardada'>('idle')
   const [retroError, setRetroError] = useState<string | null>(null)
   const [, iniciarEnvio] = useTransition()
-  const textos = useRef(new Map<string, HTMLTextAreaElement>())
 
   function guardarRetro() {
     const entrante = hilo.ultimoEntrante
@@ -104,25 +109,6 @@ function HiloTarjeta({ hilo, ahora }: { hilo: HiloWhatsApp; ahora: string }) {
         return
       }
       setRetroError(resultado.mensaje)
-    })
-  }
-
-  function aprobar(saliente: SalienteWhatsApp) {
-    if (enviando) return
-    setAviso(null)
-    setEnviando(saliente.id)
-
-    const texto = textos.current.get(saliente.id)?.value ?? ''
-
-    iniciarEnvio(async () => {
-      const resultado = await aprobarYEnviarWhatsApp({ messageId: saliente.id, body: texto })
-      setEnviando(null)
-
-      if (resultado.ok) {
-        router.refresh()
-        return
-      }
-      setAviso({ id: saliente.id, mensaje: resultado.mensaje })
     })
   }
 
@@ -158,58 +144,177 @@ function HiloTarjeta({ hilo, ahora }: { hilo: HiloWhatsApp; ahora: string }) {
 
       <ul className="flex flex-col gap-4">
         {hilo.salientes.map((saliente) => (
-          <li key={saliente.id} className="flex flex-col gap-2">
-            <div className="flex flex-wrap items-center gap-2">
-              {saliente.authoredByAgent ? (
-                <Chip tone="agent">borrador · {saliente.authoredByAgent}</Chip>
-              ) : (
-                <Chip tone="neutral">borrador</Chip>
-              )}
-              {saliente.status === 'aprobado' && <Chip tone="ok">aprobado · reintentar envío</Chip>}
-              {saliente.mediaCount > 0 && (
-                <Chip tone="neutral">
-                  {saliente.mediaCount} {saliente.mediaCount === 1 ? 'adjunto' : 'adjuntos'}
-                </Chip>
-              )}
-            </div>
-
-            <label className="sr-only" htmlFor={`saliente-${saliente.id}`}>
-              Borrador de respuesta para {hilo.clienteNombre}
-            </label>
-            <AreaTexto
-              id={`saliente-${saliente.id}`}
-              ref={(el) => {
-                if (el) textos.current.set(saliente.id, el)
-                else textos.current.delete(saliente.id)
-              }}
-              defaultValue={saliente.body ?? ''}
-              rows={3}
-            />
-
-            {aviso?.id === saliente.id && (
-              <p
-                role="status"
-                className="border-critical text-fg bg-surface rounded-xs border-l-[3px] px-3 py-2 text-[13px]"
-              >
-                {aviso.mensaje}
-              </p>
-            )}
-
-            <div className="flex items-center gap-2">
-              <Button
-                variant="primary"
-                onClick={() => aprobar(saliente)}
-                disabled={enviando === saliente.id}
-              >
-                {enviando === saliente.id ? 'Enviando…' : 'Aprobar y enviar'}
-              </Button>
-              <Mono className="text-fg-muted text-[11px]">
-                Se manda tal como quede el texto de arriba.
-              </Mono>
-            </div>
+          <li key={saliente.id}>
+            <SalienteEditor saliente={saliente} clienteNombre={hilo.clienteNombre} />
           </li>
         ))}
       </ul>
     </Card>
+  )
+}
+
+/**
+ * Un borrador editable: texto, adjuntos (fotos/propuestas por link) y el botón
+ * de aprobar. Cada uno maneja su propio estado para que aprobar uno no bloquee
+ * la edición de otro del mismo hilo.
+ */
+function SalienteEditor({
+  saliente,
+  clienteNombre,
+}: {
+  saliente: SalienteWhatsApp
+  clienteNombre: string
+}) {
+  const router = useRouter()
+  const [ocupado, setOcupado] = useState(false)
+  const [aviso, setAviso] = useState<string | null>(null)
+  const [, iniciar] = useTransition()
+  const textoRef = useRef<HTMLTextAreaElement>(null)
+  const linkRef = useRef<HTMLInputElement>(null)
+
+  function correr(accion: () => Promise<{ ok: true } | { ok: false; mensaje: string }>) {
+    if (ocupado) return
+    setAviso(null)
+    setOcupado(true)
+    iniciar(async () => {
+      const resultado = await accion()
+      setOcupado(false)
+      if (resultado.ok) {
+        router.refresh()
+        return
+      }
+      setAviso(resultado.mensaje)
+    })
+  }
+
+  function aprobar() {
+    const body = textoRef.current?.value ?? ''
+    correr(() => aprobarYEnviarWhatsApp({ messageId: saliente.id, body }))
+  }
+
+  function adjuntar() {
+    const url = linkRef.current?.value.trim() ?? ''
+    if (!url) return
+    correr(async () => {
+      const r = await adjuntarMediaWhatsApp({ messageId: saliente.id, url })
+      if (r.ok && linkRef.current) linkRef.current.value = ''
+      return r
+    })
+  }
+
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex flex-wrap items-center gap-2">
+        {saliente.authoredByAgent ? (
+          <Chip tone="agent">borrador · {saliente.authoredByAgent}</Chip>
+        ) : (
+          <Chip tone="neutral">borrador</Chip>
+        )}
+        {saliente.status === 'aprobado' && <Chip tone="ok">aprobado · reintentar envío</Chip>}
+      </div>
+
+      <label className="sr-only" htmlFor={`saliente-${saliente.id}`}>
+        Borrador de respuesta para {clienteNombre}
+      </label>
+      <AreaTexto
+        id={`saliente-${saliente.id}`}
+        ref={textoRef}
+        defaultValue={saliente.body ?? ''}
+        rows={3}
+      />
+
+      {/* Adjuntos ya anexados */}
+      {saliente.media.length > 0 && (
+        <ul className="flex flex-wrap gap-2">
+          {saliente.media.map((adjunto, index) => (
+            <li
+              key={`${adjunto.url}-${index}`}
+              className="border-line relative rounded-xs border p-1"
+            >
+              <Miniatura url={adjunto.url} caption={adjunto.caption ?? null} />
+              <button
+                type="button"
+                onClick={() => correr(() => quitarMediaWhatsApp({ messageId: saliente.id, index }))}
+                disabled={ocupado}
+                aria-label="Quitar adjunto"
+                className="bg-bg border-line text-fg-muted hover:text-fg absolute -top-2 -right-2 flex size-5 items-center justify-center rounded-full border text-[11px] disabled:opacity-40"
+              >
+                ×
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {/* Anexar por link (foto o propuesta en Drive) */}
+      <div className="flex items-center gap-2">
+        <Entrada
+          ref={linkRef}
+          type="url"
+          inputMode="url"
+          placeholder="Pega un link de Drive para adjuntar una foto o propuesta"
+          className="flex-1"
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault()
+              adjuntar()
+            }
+          }}
+        />
+        <Button variant="secondary" onClick={adjuntar} disabled={ocupado}>
+          Adjuntar
+        </Button>
+      </div>
+
+      {aviso && (
+        <p
+          role="status"
+          className="border-critical text-fg bg-surface rounded-xs border-l-[3px] px-3 py-2 text-[13px]"
+        >
+          {aviso}
+        </p>
+      )}
+
+      <div className="flex items-center gap-2">
+        <Button variant="primary" onClick={aprobar} disabled={ocupado}>
+          {ocupado ? 'Enviando…' : 'Aprobar y enviar'}
+        </Button>
+        <Mono className="text-fg-muted text-[11px]">
+          Se manda el texto de arriba con sus adjuntos.
+        </Mono>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * La miniatura de un adjunto. Un link de Drive se muestra por su thumbnail; un
+ * enlace directo, tal cual. `unoptimized` porque el dominio no lo conocemos de
+ * antemano. Si no carga, queda un recuadro con la leyenda — nunca una imagen
+ * rota sin explicación.
+ */
+function Miniatura({ url, caption }: { url: string; caption: string | null }) {
+  const [rota, setRota] = useState(false)
+
+  if (rota) {
+    return (
+      <div className="bg-surface-2 flex size-20 items-center justify-center rounded-xs p-1 text-center">
+        <Mono className="text-fg-muted text-[10px]">{caption ?? 'Adjunto'}</Mono>
+      </div>
+    )
+  }
+
+  return (
+    <div className="relative size-20 overflow-hidden rounded-xs">
+      <Image
+        src={urlMostrableDeEnlace(url)}
+        alt={caption ?? 'Adjunto'}
+        fill
+        sizes="80px"
+        unoptimized
+        onError={() => setRota(true)}
+        className="object-cover"
+      />
+    </div>
   )
 }
