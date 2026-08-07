@@ -8,6 +8,7 @@ import { createMockProvider } from '@/agents/providers/mock'
 import type { AgentInput } from '@/agents/registry'
 import { runAgent, type AgentProvider } from '@/agents/runner'
 import { createAgentStore } from '@/agents/store'
+import { construirCuentasAuditor } from '@/domain/auditor-entrada'
 import {
   rendimientoPorFormato,
   rendimientoPorPilar,
@@ -552,4 +553,190 @@ export async function correrEstratega(
   }
 
   return { ok: true, tipo: 'plan', total: data.total_pieces, runId: result.runId }
+}
+
+/* ==========================================================================
+   AUDITOR — el semáforo por red
+   ========================================================================== */
+
+export type ResultadoAuditor =
+  | {
+      readonly ok: true
+      readonly tipo: 'auditoria'
+      readonly cuentas: number
+      readonly runId: string
+      readonly costCents: number
+    }
+  | {
+      readonly ok: true
+      readonly tipo: 'escalado'
+      readonly pregunta: string
+      readonly runId: string
+    }
+  | { readonly ok: false; readonly code: string; readonly message: string; readonly runId?: string }
+
+/**
+ * El compositor del Auditor: arma su entrada desde `social_accounts`, corre el
+ * agente y escribe una fila de `account_audits` por red — con su corrida detrás.
+ *
+ * Escribir aquí, con el cliente admin, es a propósito: `account_audits` es
+ * append-only y `authenticated` solo la lee. Una auditoría sin corrida que la
+ * respalde no se puede rastrear, así que la produce el runner, no un botón. La
+ * ruta ya verificó ANTES, con el cliente de sesión, que quien dispara es del
+ * estudio del cliente.
+ *
+ * No inventa datos: si el cliente no tiene redes conectadas, no corre y lo dice.
+ */
+export async function correrAuditor(
+  admin: SupabaseClient<Database>,
+  clientId: string,
+  userId: string,
+  opciones: { omitirInterruptor?: boolean } = {},
+): Promise<ResultadoAuditor> {
+  const { data: cliente, error: errorCliente } = await admin
+    .from('clients')
+    .select('id, org_id')
+    .eq('id', clientId)
+    .maybeSingle()
+
+  if (errorCliente)
+    return {
+      ok: false,
+      code: 'lectura',
+      message: `No se pudo leer el cliente: ${errorCliente.message}`,
+    }
+  if (!cliente) return { ok: false, code: 'no_encontrado', message: 'No se encontró el cliente.' }
+
+  const { data: cuentas, error: errorCuentas } = await admin
+    .from('social_accounts')
+    .select(
+      'platform, handle, url, followers, followers_delta, last_post_at, posts_per_week, target_per_week, profile_checklist, unanswered_dms, unanswered_comments',
+    )
+    .eq('client_id', clientId)
+
+  if (errorCuentas)
+    return {
+      ok: false,
+      code: 'lectura',
+      message: `No se pudieron leer las redes: ${errorCuentas.message}`,
+    }
+  if (!cuentas || cuentas.length === 0) {
+    return {
+      ok: false,
+      code: 'sin_cuentas',
+      message:
+        'Este cliente no tiene redes conectadas. Conecta al menos una cuenta antes de correr el Auditor.',
+    }
+  }
+
+  const { data: card } = await admin
+    .from('context_card_versions')
+    .select(
+      'id, version, what_it_is, positioning, differentiators, faqs, audience, tone, banned_words, approved_examples, cadence, created_at',
+    )
+    .eq('client_id', clientId)
+    .order('version', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (!card) {
+    return {
+      ok: false,
+      code: 'sin_context_card',
+      message:
+        'Este cliente no tiene Context Card. Toda corrida se registra con la versión con la que corrió; créala en Marca antes de auditar.',
+    }
+  }
+
+  const contextCard: ContextCard = {
+    id: card.id,
+    version: card.version,
+    whatItIs: card.what_it_is,
+    positioning: card.positioning,
+    differentiators: card.differentiators ?? [],
+    faqs: leerFaqs(card.faqs),
+    audience: card.audience,
+    tone: card.tone ?? [],
+    bannedWords: card.banned_words ?? [],
+    approvedExamples: card.approved_examples ?? [],
+    cadence: card.cadence,
+    createdAt: card.created_at,
+  }
+
+  // El mes solo etiqueta la corrida (una auditoría no es mensual). Se arma en UTC
+  // sin crear un Date fuera de @/lib/time, igual que el chequeo de gasto.
+  const ahora = systemClock.now()
+  const month =
+    `${ahora.getUTCFullYear()}-${String(ahora.getUTCMonth() + 1).padStart(2, '0')}` as MonthKey
+
+  const input: AgentInput<'auditor'> = {
+    client_id: clientId,
+    month,
+    context_version: contextCard.version,
+    accounts: construirCuentasAuditor(cuentas),
+    checked_at: ahora.toISOString(),
+  }
+
+  const proveedor = proveedorDeEnv()
+  if ('error' in proveedor) return { ok: false, code: 'config', message: proveedor.error }
+
+  const result = await runAgent('auditor', input, {
+    orgId: cliente.org_id,
+    clientId,
+    contextCard: renderContextCard(contextCard),
+    contextVersion: contextCard.version,
+    trigger: 'manual',
+    triggeredBy: userId,
+    provider: proveedor,
+    store: createAgentStore(admin),
+    clock: systemClock,
+    configuredProvider: serverEnv().AGENTS_PROVIDER,
+    ...(opciones.omitirInterruptor ? { omitirInterruptor: true } : {}),
+  })
+
+  if (!result.ok) {
+    return {
+      ok: false,
+      code: result.error.code,
+      message: result.error.message,
+      ...(result.runId ? { runId: result.runId } : {}),
+    }
+  }
+
+  if (result.output.kind === 'escalamiento') {
+    return { ok: true, tipo: 'escalado', pregunta: result.output.pregunta, runId: result.runId }
+  }
+
+  // Una fila por red. `findings` guarda el semáforo, el titular y los hallazgos;
+  // la columna `score` es el número que ordena las tarjetas de Redes.
+  const data = result.output.data
+  const filas = data.accounts.map((cuenta) => ({
+    org_id: cliente.org_id,
+    client_id: clientId,
+    platform: cuenta.platform,
+    score: cuenta.score,
+    findings: {
+      light: cuenta.light,
+      headline: data.headline,
+      findings: cuenta.findings,
+    } as Json,
+  }))
+
+  const { error: errorEscritura } = await admin.from('account_audits').insert(filas)
+  if (errorEscritura) {
+    return {
+      ok: false,
+      code: 'escritura',
+      message: `El Auditor corrió, pero no se pudo guardar la auditoría: ${errorEscritura.message}`,
+      runId: result.runId,
+    }
+  }
+
+  return {
+    ok: true,
+    tipo: 'auditoria',
+    cuentas: filas.length,
+    runId: result.runId,
+    costCents: result.costCents,
+  }
 }
