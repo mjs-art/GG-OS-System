@@ -24,6 +24,12 @@ export type ResultadoWhatsApp = { ok: true } | { ok: false; mensaje: string }
 
 const schema = z.object({
   messageId: z.uuid('No se identificó el mensaje. Recarga la bandeja.'),
+  /**
+   * El texto editado por la persona antes de aprobar. `nullish` porque puede
+   * aprobarse el borrador tal cual. Si viene, se guarda en el mismo UPDATE que
+   * firma la aprobación: quien edita es quien firma.
+   */
+  body: z.string().trim().max(4000).nullish(),
 })
 
 export async function aprobarYEnviarWhatsApp(entrada: unknown): Promise<ResultadoWhatsApp> {
@@ -32,7 +38,7 @@ export async function aprobarYEnviarWhatsApp(entrada: unknown): Promise<Resultad
     return { ok: false, mensaje: parsed.error.issues[0]?.message ?? 'Revisa lo que mandaste.' }
   }
 
-  const { messageId } = parsed.data
+  const { messageId, body } = parsed.data
 
   // Sin webhook de envío no hay a dónde mandar. Se revisa antes de tocar la
   // base: aprobar algo que no se puede enviar lo dejaría a medias.
@@ -63,6 +69,9 @@ export async function aprobarYEnviarWhatsApp(entrada: unknown): Promise<Resultad
       status: 'aprobado',
       approved_by: user.id,
       approved_at: systemClock.now().toISOString(),
+      // Si Ana editó el texto, se guarda al aprobar: la versión que se manda es
+      // la que ella firmó, no la que redactó el agente.
+      ...(typeof body === 'string' ? { body } : {}),
     })
     .eq('id', messageId)
     .eq('direction', 'outbound')

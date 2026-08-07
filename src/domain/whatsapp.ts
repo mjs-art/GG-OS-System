@@ -68,6 +68,37 @@ export type EntranteWhatsApp = z.infer<typeof entranteSchema>
 export type ReporteWhatsApp = z.infer<typeof reporteSchema>
 export type MediaWhatsApp = z.infer<typeof mediaSchema>
 
+/* -------------------------------------------------------------------------- */
+/*  Vistas de la bandeja de salientes                                          */
+/*                                                                             */
+/*  Tipos que cruzan de la carga (server-only) al componente cliente. Viven    */
+/*  aquí, en un módulo sin directiva, por la misma trampa que documenta        */
+/*  CLAUDE.md: un valor de un módulo 'use client' importado en el servidor     */
+/*  llega como referencia, no como valor. Los tipos no, pero se agrupan aquí   */
+/*  para no volver a cruzar esa línea sin querer.                              */
+/* -------------------------------------------------------------------------- */
+
+/** Un borrador de saliente esperando aprobación. */
+export interface SalienteWhatsApp {
+  id: string
+  body: string | null
+  status: 'borrador' | 'aprobado'
+  /** El agente que lo redactó, o `null` si lo escribió una persona. */
+  authoredByAgent: string | null
+  mediaCount: number
+  createdAt: string
+}
+
+/** Una conversación con al menos un saliente pendiente, y su contexto. */
+export interface HiloWhatsApp {
+  conversationId: string
+  clienteNombre: string
+  waPhone: string
+  /** El último mensaje del cliente, para juzgar la respuesta sin cambiar de vista. */
+  ultimoEntrante: { body: string | null; createdAt: string } | null
+  salientes: SalienteWhatsApp[]
+}
+
 /**
  * Lo que la app le manda a n8n para que envíe un saliente ya aprobado. n8n no
  * toca la base: recibe a dónde, qué texto y qué adjuntos, y devuelve el reporte
