@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { normalizarTelefono, payloadN8nSchema } from './whatsapp'
+import { construirEnvioN8n, normalizarTelefono, payloadN8nSchema } from './whatsapp'
 
 describe('normalizar teléfono a E.164', () => {
   it('deja pasar uno que ya viene bien', () => {
@@ -69,5 +69,41 @@ describe('payload de n8n', () => {
       status: 'entregado',
     })
     expect(parsed.success).toBe(false)
+  })
+})
+
+describe('construir el envío a n8n', () => {
+  const id = '00000000-0000-4000-8000-000000000009'
+  const telefono = '+525512345678'
+
+  it('arma un saliente de solo texto', () => {
+    const envio = construirEnvioN8n({ id, body: 'Ya quedó el reel, ¿lo ves?', media: [] }, telefono)
+    expect(envio).toEqual({
+      message_id: id,
+      to: telefono,
+      text: 'Ya quedó el reel, ¿lo ves?',
+      media: [],
+    })
+  })
+
+  it('arma un saliente de solo adjunto y rellena kind por default', () => {
+    const envio = construirEnvioN8n(
+      { id, body: null, media: [{ url: 'https://drive.example/reel.mp4' }] },
+      telefono,
+    )
+    expect(envio?.text).toBeNull()
+    expect(envio?.media).toEqual([{ kind: 'image', url: 'https://drive.example/reel.mp4' }])
+  })
+
+  it('no manda nada cuando no hay ni texto ni adjuntos', () => {
+    expect(construirEnvioN8n({ id, body: '   ', media: [] }, telefono)).toBeNull()
+    expect(construirEnvioN8n({ id, body: null, media: [] }, telefono)).toBeNull()
+  })
+
+  it('no manda a medias un adjunto con forma corrupta', () => {
+    // Falta la url: preferimos no enviar a enviar un adjunto roto.
+    expect(
+      construirEnvioN8n({ id, body: 'con foto', media: [{ kind: 'image' }] }, telefono),
+    ).toBeNull()
   })
 })
