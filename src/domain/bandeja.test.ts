@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  agruparPorCausa,
   contarPorFiltro,
   estaEscribiendo,
   filtrarEscalamientos,
@@ -10,6 +11,7 @@ import {
   resumenCola,
   SIN_SELECCION,
   type Escalamiento,
+  type OpcionEscalamiento,
 } from '@/domain/bandeja'
 import type { AgentKey, RuleSeverity } from '@/domain/labels'
 
@@ -242,5 +244,78 @@ describe('los atajos no se disparan mientras se escribe', () => {
     expect(estaEscribiendo(document.body)).toBe(false)
     expect(estaEscribiendo(document.createElement('article'))).toBe(false)
     expect(estaEscribiendo(null)).toBe(false)
+  })
+})
+
+describe('agrupar escalamientos por causa', () => {
+  const OPCIONES_A: OpcionEscalamiento[] = [
+    { key: 'confirmar', label: 'Confirmar' },
+    { key: 'quitar', label: 'Quitar la palabra' },
+  ]
+
+  function esc(
+    id: string,
+    {
+      agente = 'editor_marca' as AgentKey,
+      pregunta = '¿Uso "exclusivo" aunque está en la lista de prohibidas?',
+      opciones = OPCIONES_A,
+    } = {},
+  ): Escalamiento {
+    return {
+      id,
+      agente,
+      severidad: 'media',
+      pregunta,
+      opciones,
+      creadoEn: '2026-08-01T10:00:00.000Z',
+      cliente: { id: 'cli-1', nombre: 'Dry Express', slug: 'dry-express' },
+      pieza: null,
+    }
+  }
+
+  it('junta las que hacen la misma pregunta con las mismas opciones', () => {
+    const grupos = agruparPorCausa([esc('a'), esc('b'), esc('c')])
+    expect(grupos).toHaveLength(1)
+    expect(grupos[0]?.escalamientos.map((e) => e.id)).toEqual(['a', 'b', 'c'])
+    expect(grupos[0]?.agente).toBe('editor_marca')
+  })
+
+  it('no agrupa lo que pregunta distinto', () => {
+    const grupos = agruparPorCausa([
+      esc('a', { pregunta: '¿Uso "exclusivo"?' }),
+      esc('b', { pregunta: '¿Uso "imperdible"?' }),
+    ])
+    expect(grupos).toHaveLength(0)
+  })
+
+  it('la misma pregunta de agentes distintos no es el mismo lote', () => {
+    const grupos = agruparPorCausa([
+      esc('a', { agente: 'redactor' }),
+      esc('b', { agente: 'guionista' }),
+    ])
+    expect(grupos).toHaveLength(0)
+  })
+
+  it('misma pregunta pero opciones distintas no se puede cerrar con una respuesta', () => {
+    const grupos = agruparPorCausa([
+      esc('a'),
+      esc('b', { opciones: [{ key: 'otra', label: 'Otra cosa' }] }),
+    ])
+    expect(grupos).toHaveLength(0)
+  })
+
+  it('no devuelve grupos de uno: eso es una tarjeta normal', () => {
+    const grupos = agruparPorCausa([esc('sola'), esc('otra', { pregunta: '¿Algo más?' })])
+    expect(grupos).toHaveLength(0)
+  })
+
+  it('conserva el orden de entrada, para respetar la urgencia de la cola', () => {
+    const grupos = agruparPorCausa([
+      esc('reel', { pregunta: '¿Reel largo?' }),
+      esc('reel-2', { pregunta: '¿Reel largo?' }),
+      esc('banned', { pregunta: '¿Uso "exclusivo"?' }),
+      esc('banned-2', { pregunta: '¿Uso "exclusivo"?' }),
+    ])
+    expect(grupos.map((g) => g.pregunta)).toEqual(['¿Reel largo?', '¿Uso "exclusivo"?'])
   })
 })

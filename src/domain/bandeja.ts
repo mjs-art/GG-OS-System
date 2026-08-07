@@ -204,6 +204,69 @@ export function opcionPorAtajo(
   return opciones[Number(tecla) - 1] ?? null
 }
 
+/* -------------------------------------------------------------------------- */
+/*  Lote: escalamientos que comparten causa                                    */
+/* -------------------------------------------------------------------------- */
+
+export interface GrupoEscalamiento {
+  /** Estable entre renders: mismo agente + pregunta + opciones → misma clave. */
+  clave: string
+  agente: AgentKey
+  pregunta: string
+  opciones: OpcionEscalamiento[]
+  /** Los escalamientos del grupo, en el orden en que venían en la cola. */
+  escalamientos: Escalamiento[]
+}
+
+/**
+ * El separador de la clave de causa. `` no aparece en texto de interfaz,
+ * así que "a" + sep + "b" nunca colisiona con "a·b" escrito a mano.
+ */
+const SEP = ''
+
+function claveDeCausa(e: Escalamiento): string {
+  // Las opciones entran a la clave: dos preguntas iguales con botones distintos
+  // NO se pueden cerrar con la misma respuesta, así que no son el mismo lote.
+  const opciones = e.opciones.map((o) => o.key).join(SEP)
+  return [e.agente, e.pregunta.trim(), opciones].join(SEP)
+}
+
+/**
+ * Junta los escalamientos que hacen exactamente la misma pregunta.
+ *
+ * El Editor de marca escala la misma duda en cada pieza que la toca: veinte
+ * tarjetas idénticas que hoy se responden una por una. Si el agente, la
+ * pregunta y las opciones coinciden, la decisión es una sola y se aplica a
+ * todas de un golpe. Eso es lo que "resolver en lote" quiere decir aquí — no
+ * "seleccionar varias a mano", sino reconocer que el agente ya las agrupó al
+ * preguntar lo mismo.
+ *
+ * Devuelve solo los grupos de dos o más: un grupo de uno es una tarjeta normal
+ * y no necesita banner. El orden respeta el de la cola que entra, así que si se
+ * le pasa la cola ya ordenada por urgencia, los lotes salen en ese mismo orden.
+ */
+export function agruparPorCausa(escalamientos: readonly Escalamiento[]): GrupoEscalamiento[] {
+  const grupos = new Map<string, GrupoEscalamiento>()
+
+  for (const e of escalamientos) {
+    const clave = claveDeCausa(e)
+    const grupo = grupos.get(clave)
+    if (grupo) {
+      grupo.escalamientos.push(e)
+    } else {
+      grupos.set(clave, {
+        clave,
+        agente: e.agente,
+        pregunta: e.pregunta,
+        opciones: e.opciones,
+        escalamientos: [e],
+      })
+    }
+  }
+
+  return [...grupos.values()].filter((g) => g.escalamientos.length >= 2)
+}
+
 /** Los atajos que pinta la barra fija de abajo. Una sola fuente de verdad. */
 export const ATAJOS_BANDEJA = [
   { teclas: 'J / K', que: 'mover' },

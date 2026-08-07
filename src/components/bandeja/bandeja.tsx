@@ -2,11 +2,13 @@
 
 import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react'
-import { resolverEscalamiento } from '@/components/bandeja/acciones'
+import { resolverEscalamiento, resolverEscalamientosEnLote } from '@/components/bandeja/acciones'
 import { BarraAtajos } from '@/components/bandeja/barra-atajos'
+import { LoteEscalamientos } from '@/components/bandeja/lote-escalamientos'
 import { TarjetaEscalamiento } from '@/components/bandeja/tarjeta-escalamiento'
 import { Display, Mono } from '@/components/ui/primitives'
 import {
+  agruparPorCausa,
   contarPorFiltro,
   estaEscribiendo,
   filtrarEscalamientos,
@@ -19,6 +21,7 @@ import {
   SIN_SELECCION,
   type Escalamiento,
   type FiltroBandeja,
+  type GrupoEscalamiento,
   type OpcionEscalamiento,
 } from '@/domain/bandeja'
 import { cn } from '@/lib/cn'
@@ -62,6 +65,8 @@ export function Bandeja({ escalamientos, piezasAvanzadasHoy, ahora }: BandejaPro
   const [ocultos, setOcultos] = useState<ReadonlySet<string>>(new Set())
   const [pospuestos, setPospuestos] = useState<readonly string[]>([])
   const [pendiente, setPendiente] = useState<string | null>(null)
+  /** La clave del grupo cuyo lote está en vuelo. Bloquea el banner mientras. */
+  const [loteEnCurso, setLoteEnCurso] = useState<string | null>(null)
   const [aviso, setAviso] = useState<string | null>(null)
   const [, iniciarEnvio] = useTransition()
 
@@ -83,6 +88,14 @@ export function Bandeja({ escalamientos, piezasAvanzadasHoy, ahora }: BandejaPro
   // número tiene que bajar junto con la tarjeta, no 200ms después.
   const contados = useMemo(() => cola.filter((e) => !saliendo.has(e.id)), [cola, saliendo])
   const conteos = useMemo(() => contarPorFiltro(contados), [contados])
+
+  // Los lotes salen de lo que se ve ahora: respetan el filtro activo y no
+  // cuentan lo que ya se está colapsando. Se calculan sobre `lista` para que un
+  // banner nunca ofrezca resolver una tarjeta que no está en pantalla.
+  const grupos = useMemo(
+    () => agruparPorCausa(lista.filter((e) => !saliendo.has(e.id))),
+    [lista, saliendo],
+  )
 
   // El cursor se acomoda al RENDER y no en un efecto: cuando una tarjeta se
   // resuelve, la lista se acorta y el índice guardado puede quedar fuera de
@@ -126,6 +139,52 @@ export function Bandeja({ escalamientos, piezasAvanzadasHoy, ahora }: BandejaPro
       })
     },
     [pendiente, router],
+  )
+
+  const resolverLote = useCallback(
+    (grupo: GrupoEscalamiento, opcion: OpcionEscalamiento) => {
+      if (pendiente || loteEnCurso) return
+      setAviso(null)
+      setLoteEnCurso(grupo.clave)
+
+      const ids = grupo.escalamientos.map((e) => e.id)
+      // Todas colapsan a la vez: el lote se siente como una sola acción.
+      setSaliendo((previos) => {
+        const siguiente = new Set(previos)
+        for (const id of ids) siguiente.add(id)
+        return siguiente
+      })
+
+      const quitarDeLaLista = window.setTimeout(() => {
+        setOcultos((previos) => {
+          const siguiente = new Set(previos)
+          for (const id of ids) siguiente.add(id)
+          return siguiente
+        })
+      }, DURACION_COLAPSO_MS)
+
+      iniciarEnvio(async () => {
+        const resultado = await resolverEscalamientosEnLote({
+          ids,
+          opcion: opcion.label,
+          respuesta: null,
+        })
+
+        setLoteEnCurso(null)
+
+        if (resultado.ok) {
+          router.refresh()
+          return
+        }
+
+        // Rollback visible: todas las tarjetas del lote regresan.
+        window.clearTimeout(quitarDeLaLista)
+        setSaliendo((previos) => sinElementos(previos, ids))
+        setOcultos((previos) => sinElementos(previos, ids))
+        setAviso(resultado.mensaje)
+      })
+    },
+    [pendiente, loteEnCurso, router],
   )
 
   const posponer = useCallback((escalamiento: Escalamiento) => {
@@ -276,26 +335,33 @@ export function Bandeja({ escalamientos, piezasAvanzadasHoy, ahora }: BandejaPro
             </button>
           </div>
         ) : (
-          <ul className="flex flex-col gap-3">
-            {lista.map((escalamiento, posicion) => (
-              <TarjetaEscalamiento
-                key={escalamiento.id}
-                ref={(elemento) => {
-                  if (elemento) tarjetas.current.set(escalamiento.id, elemento)
-                  else tarjetas.current.delete(escalamiento.id)
-                }}
-                escalamiento={escalamiento}
-                activa={posicion === indiceActivo}
-                saliendo={saliendo.has(escalamiento.id)}
-                pendiente={pendiente === escalamiento.id}
-                ahora={ahora}
-                onSeleccionar={() => setIndice(posicion)}
-                onResolver={(opcion, respuesta) => resolver(escalamiento, opcion, respuesta)}
-                onPosponer={() => posponer(escalamiento)}
-                onAbrir={() => abrir(escalamiento)}
-              />
-            ))}
-          </ul>
+          <div className="flex flex-col gap-6">
+            <LoteEscalamientos
+              grupos={grupos}
+              claveEnCurso={loteEnCurso}
+              onResolverLote={resolverLote}
+            />
+            <ul className="flex flex-col gap-3">
+              {lista.map((escalamiento, posicion) => (
+                <TarjetaEscalamiento
+                  key={escalamiento.id}
+                  ref={(elemento) => {
+                    if (elemento) tarjetas.current.set(escalamiento.id, elemento)
+                    else tarjetas.current.delete(escalamiento.id)
+                  }}
+                  escalamiento={escalamiento}
+                  activa={posicion === indiceActivo}
+                  saliendo={saliendo.has(escalamiento.id)}
+                  pendiente={pendiente === escalamiento.id}
+                  ahora={ahora}
+                  onSeleccionar={() => setIndice(posicion)}
+                  onResolver={(opcion, respuesta) => resolver(escalamiento, opcion, respuesta)}
+                  onPosponer={() => posponer(escalamiento)}
+                  onAbrir={() => abrir(escalamiento)}
+                />
+              ))}
+            </ul>
+          </div>
         )}
       </div>
 
@@ -330,5 +396,11 @@ function BandejaLimpia({ piezasAvanzadasHoy }: { piezasAvanzadasHoy: number }) {
 function sinElemento(conjunto: ReadonlySet<string>, id: string): ReadonlySet<string> {
   const copia = new Set(conjunto)
   copia.delete(id)
+  return copia
+}
+
+function sinElementos(conjunto: ReadonlySet<string>, ids: readonly string[]): ReadonlySet<string> {
+  const copia = new Set(conjunto)
+  for (const id of ids) copia.delete(id)
   return copia
 }

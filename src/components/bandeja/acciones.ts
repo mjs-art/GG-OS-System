@@ -83,3 +83,79 @@ export async function resolverEscalamiento(entrada: unknown): Promise<ResultadoA
 
   return { ok: true }
 }
+
+const loteSchema = z
+  .object({
+    ids: z
+      .array(z.uuid())
+      .min(1, 'No hay escalamientos que resolver.')
+      // El tope evita que un bug de selección mande un UPDATE gigante; ningún
+      // lote real de una sola pregunta llega a esto.
+      .max(200, 'Son demasiados de una vez. Resuélvelos en dos tandas.'),
+    opcion: z.string().trim().min(1).max(200).nullish(),
+    respuesta: z.string().trim().max(2000).nullish(),
+  })
+  .refine((valor) => Boolean(valor.opcion) || Boolean(valor.respuesta), {
+    message: 'Elige una opción o escríbele al agente qué hacer.',
+  })
+
+export type ResultadoLote = { ok: true; resueltos: number } | { ok: false; mensaje: string }
+
+/**
+ * Resolver de un golpe todos los escalamientos que hacen la misma pregunta.
+ *
+ * La decisión es una, pero **el rastro no se colapsa**: cada renglón guarda su
+ * propio `resolved_by`, su `resolved_at` y su `resolution`. Que Ana lo haya
+ * decidido en un clic no borra que fueron veinte piezas las que se movieron —
+ * eso sigue estando pieza por pieza en la bitácora, que es lo que se audita.
+ *
+ * El `.is('resolved_at', null)` cubre la carrera de dos pestañas: lo que otra
+ * ya cerró no se vuelve a tocar, y el conteo devuelto dice cuántos de verdad se
+ * movieron, no cuántos se pidieron.
+ */
+export async function resolverEscalamientosEnLote(entrada: unknown): Promise<ResultadoLote> {
+  const parsed = loteSchema.safeParse(entrada)
+  if (!parsed.success) {
+    return { ok: false, mensaje: parsed.error.issues[0]?.message ?? 'Revisa lo que mandaste.' }
+  }
+
+  const { ids, opcion, respuesta } = parsed.data
+  const resolucion = [opcion, respuesta].filter(Boolean).join(' — ')
+
+  const supabase = await createClient()
+
+  const {
+    data: { user },
+    error: errorUsuario,
+  } = await supabase.auth.getUser()
+
+  if (errorUsuario || !user) {
+    return { ok: false, mensaje: 'Se cerró tu sesión. Vuelve a entrar y sigue donde ibas.' }
+  }
+
+  const { data, error } = await supabase
+    .from('escalations')
+    .update({
+      resolved_at: systemClock.now().toISOString(),
+      resolved_by: user.id,
+      resolution: resolucion,
+    })
+    .in('id', ids)
+    .is('resolved_at', null)
+    .select('id')
+
+  if (error) {
+    return { ok: false, mensaje: `No se pudo guardar la respuesta: ${error.message}` }
+  }
+
+  if (!data || data.length === 0) {
+    return {
+      ok: false,
+      mensaje: 'Esos escalamientos ya los resolvió alguien más, o ya no tienes acceso al cliente.',
+    }
+  }
+
+  revalidatePath('/', 'layout')
+
+  return { ok: true, resueltos: data.length }
+}
