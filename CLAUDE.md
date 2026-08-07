@@ -224,3 +224,10 @@ Detalle en `docs/agents.md`. Lo esencial:
 3. Lógica de negocio nueva → prueba en Vitest. Política de RLS nueva → prueba en pgTAP. Flujo crítico nuevo → prueba en Playwright.
 4. `pnpm verify` antes de dar por terminado algo. Si algo falla, dilo con la salida; no lo describas como listo.
 5. Si el trabajo toca varias secciones grandes a la vez, propón partirlo. Esta app se construye por secciones completas, no por capas a medias.
+
+---
+
+## Seguimiento en Linear
+
+- **Todo el trabajo de este repo se documenta en Linear, en el equipo `Proyectos Personales`. Siempre.** No es opcional ni "cuando acabe": cada rebanada tiene su issue y ahí va el plan, el estado, las decisiones, los bloqueos y los PRs enlazados. Se crea al arrancar la rebanada y se marca el avance en el camino, no al final.
+- Issue vivo de referencia: `PRO-22` (WhatsApp vía n8n).
