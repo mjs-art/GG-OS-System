@@ -8,6 +8,13 @@ import { createMockProvider } from '@/agents/providers/mock'
 import type { AgentInput } from '@/agents/registry'
 import { runAgent, type AgentProvider } from '@/agents/runner'
 import { createAgentStore } from '@/agents/store'
+import {
+  construirNoPublicadas,
+  construirPiecePerformance,
+  totalesDeMes,
+  type PiezaMedida,
+  type PiezaPendiente,
+} from '@/domain/analista-entrada'
 import { construirCuentasAuditor } from '@/domain/auditor-entrada'
 import {
   rendimientoPorFormato,
@@ -736,6 +743,247 @@ export async function correrAuditor(
     ok: true,
     tipo: 'auditoria',
     cuentas: filas.length,
+    runId: result.runId,
+    costCents: result.costCents,
+  }
+}
+
+/* ==========================================================================
+   ANALISTA — la lectura del mes
+   ========================================================================== */
+
+export type ModoAnalista = 'cierre' | 'mitad_de_mes'
+
+export type ResultadoAnalista =
+  | {
+      readonly ok: true
+      readonly tipo: 'analisis'
+      readonly quitar: number
+      readonly meterMas: number
+      readonly mejorar: number
+      readonly runId: string
+      readonly costCents: number
+    }
+  | {
+      readonly ok: true
+      readonly tipo: 'escalado'
+      readonly pregunta: string
+      readonly runId: string
+    }
+  | { readonly ok: false; readonly code: string; readonly message: string; readonly runId?: string }
+
+/**
+ * El compositor del Analista: arma la lectura del mes desde los resultados por
+ * pieza, los totales del mes y lo que todavía no sale, corre el agente y —como el
+ * Analista `writes: []`— deja su propuesta en la bitácora (y en la Bandeja si
+ * escala). No escribe de vuelta al Context Card: los `learnings` son una
+ * propuesta, y aplicarlos es una acción humana aparte (regla #1).
+ *
+ * Una pieza publicada sin métricas capturadas se omite del análisis: no se puede
+ * leer lo que no se midió, y meterla en cero la haría ver como la peor del mes.
+ */
+export async function correrAnalista(
+  admin: SupabaseClient<Database>,
+  clientId: string,
+  month: MonthKey,
+  mode: ModoAnalista,
+  userId: string,
+  opciones: { omitirInterruptor?: boolean } = {},
+): Promise<ResultadoAnalista> {
+  const { data: cliente, error: errorCliente } = await admin
+    .from('clients')
+    .select('id, org_id')
+    .eq('id', clientId)
+    .maybeSingle()
+
+  if (errorCliente)
+    return {
+      ok: false,
+      code: 'lectura',
+      message: `No se pudo leer el cliente: ${errorCliente.message}`,
+    }
+  if (!cliente) return { ok: false, code: 'no_encontrado', message: 'No se encontró el cliente.' }
+
+  const { data: card } = await admin
+    .from('context_card_versions')
+    .select(
+      'id, version, what_it_is, positioning, differentiators, faqs, audience, tone, banned_words, approved_examples, cadence, created_at',
+    )
+    .eq('client_id', clientId)
+    .order('version', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (!card) {
+    return {
+      ok: false,
+      code: 'sin_context_card',
+      message:
+        'Este cliente no tiene Context Card. Toda corrida se registra con la versión con la que corrió; créala en Marca antes de analizar.',
+    }
+  }
+
+  const contextCard: ContextCard = {
+    id: card.id,
+    version: card.version,
+    whatItIs: card.what_it_is,
+    positioning: card.positioning,
+    differentiators: card.differentiators ?? [],
+    faqs: leerFaqs(card.faqs),
+    audience: card.audience,
+    tone: card.tone ?? [],
+    bannedWords: card.banned_words ?? [],
+    approvedExamples: card.approved_examples ?? [],
+    cadence: card.cadence,
+    createdAt: card.created_at,
+  }
+
+  const { data: piezas } = await admin
+    .from('pieces')
+    .select('id, format, pillar_id, hook, status, publish_at')
+    .eq('client_id', clientId)
+    .eq('month', month)
+
+  const { data: pilares } = await admin.from('pillars').select('id, name').eq('client_id', clientId)
+  const nombrePilar = new Map((pilares ?? []).map((p) => [p.id, p.name] as const))
+  const pilarDe = (id: string | null): string =>
+    id ? (nombrePilar.get(id) ?? 'Sin pilar') : 'Sin pilar'
+
+  const publicadas = (piezas ?? []).filter((p) => p.status === 'publicado' && p.publish_at)
+  const pendientesRaw = (piezas ?? []).filter((p) => p.status !== 'publicado' && p.publish_at)
+
+  // La última medición por pieza publicada. Igual que el Estratega: se ordena
+  // por `measured_at` desc y la primera que aparece por pieza gana.
+  const idsPublicadas = publicadas.map((p) => p.id)
+  const { data: mediciones } = idsPublicadas.length
+    ? await admin
+        .from('results_piece')
+        .select('piece_id, reach, interactions, saves, shares, measured_at')
+        .eq('client_id', clientId)
+        .in('piece_id', idsPublicadas)
+        .order('measured_at', { ascending: false })
+    : {
+        data: [] as {
+          piece_id: string
+          reach: number
+          interactions: number
+          saves: number
+          shares: number
+          measured_at: string
+        }[],
+      }
+
+  const ultima = new Map<
+    string,
+    { reach: number; interactions: number; saves: number; shares: number }
+  >()
+  for (const m of mediciones ?? []) {
+    if (!ultima.has(m.piece_id)) ultima.set(m.piece_id, m)
+  }
+
+  const medidas: PiezaMedida[] = []
+  for (const p of publicadas) {
+    const publishAt = p.publish_at
+    const m = ultima.get(p.id)
+    if (!publishAt || !m) continue
+    medidas.push({
+      piece_id: p.id,
+      format: p.format,
+      pillar: pilarDe(p.pillar_id),
+      published_at: publishAt,
+      hook: p.hook,
+      reach: m.reach,
+      interactions: m.interactions,
+      saves: m.saves,
+      shares: m.shares,
+    })
+  }
+
+  const pendientes: PiezaPendiente[] = []
+  for (const p of pendientesRaw) {
+    const publishAt = p.publish_at
+    if (!publishAt) continue
+    pendientes.push({
+      piece_id: p.id,
+      publish_at: publishAt,
+      format: p.format,
+      pillar: pilarDe(p.pillar_id),
+      hook: p.hook,
+      status: p.status,
+    })
+  }
+
+  const { data: mensual } = await admin
+    .from('results_monthly')
+    .select(
+      'reach, impressions, saves, shares, profile_visits, link_clicks, new_followers, updated_at',
+    )
+    .eq('client_id', clientId)
+    .eq('month', month)
+    .order('updated_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  // El objetivo del mes no tiene columna propia; se toma de la campaña más
+  // reciente del cliente (su `objective` es un objetivo declarado). Sin campaña,
+  // un default neutro: el objetivo solo matiza qué CTA propone el agente.
+  const { data: campanas } = await admin
+    .from('campaigns')
+    .select('objective, start_date')
+    .eq('client_id', clientId)
+    .order('start_date', { ascending: false })
+    .limit(1)
+  const monthGoal =
+    campanas?.[0]?.objective?.trim() || 'Crecer y mantener la cuenta activa este mes.'
+
+  const input: AgentInput<'analista'> = {
+    client_id: clientId,
+    month,
+    context_version: contextCard.version,
+    mode,
+    piece_performance: construirPiecePerformance(medidas),
+    monthly_totals: totalesDeMes(mensual ?? null),
+    unpublished_pieces: construirNoPublicadas(pendientes),
+    month_goal: monthGoal,
+  }
+
+  const proveedor = proveedorDeEnv()
+  if ('error' in proveedor) return { ok: false, code: 'config', message: proveedor.error }
+
+  const result = await runAgent('analista', input, {
+    orgId: cliente.org_id,
+    clientId,
+    contextCard: renderContextCard(contextCard),
+    contextVersion: contextCard.version,
+    trigger: 'manual',
+    triggeredBy: userId,
+    provider: proveedor,
+    store: createAgentStore(admin),
+    clock: systemClock,
+    configuredProvider: serverEnv().AGENTS_PROVIDER,
+    ...(opciones.omitirInterruptor ? { omitirInterruptor: true } : {}),
+  })
+
+  if (!result.ok) {
+    return {
+      ok: false,
+      code: result.error.code,
+      message: result.error.message,
+      ...(result.runId ? { runId: result.runId } : {}),
+    }
+  }
+
+  if (result.output.kind === 'escalamiento') {
+    return { ok: true, tipo: 'escalado', pregunta: result.output.pregunta, runId: result.runId }
+  }
+
+  const data = result.output.data
+  return {
+    ok: true,
+    tipo: 'analisis',
+    quitar: data.quitar.length,
+    meterMas: data.meter_mas.length,
+    mejorar: data.mejorar.length,
     runId: result.runId,
     costCents: result.costCents,
   }
