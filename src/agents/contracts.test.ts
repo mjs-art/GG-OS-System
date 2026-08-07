@@ -415,6 +415,30 @@ describe('runAgent', () => {
     expect(result.ok).toBe(false)
     if (!result.ok) expect(result.error.code).toBe('agente_apagado')
   })
+
+  it('con omitirInterruptor corre aunque esté apagado, pero NO se salta el tope', async () => {
+    // "Preparar el mes" salta el interruptor de encendido — y solo ese.
+    const apagado = makeStore({
+      loadPolicy: async () => ({ enabled: false, monthlyCapCents: 500, model: null }),
+    })
+    const corre = await runAgent('estratega', TOWER_BAR_INPUTS.estratega, {
+      ...makeCtx(apagado.store),
+      omitirInterruptor: true,
+    })
+    expect(corre.ok).toBe(true)
+
+    // El mismo bypass no puede pasar por encima del presupuesto: sigue vivo.
+    const sinSaldo = makeStore({
+      loadPolicy: async () => ({ enabled: false, monthlyCapCents: 500, model: null }),
+      spendThisMonthCents: async () => 500,
+    })
+    const frenado = await runAgent('estratega', TOWER_BAR_INPUTS.estratega, {
+      ...makeCtx(sinSaldo.store),
+      omitirInterruptor: true,
+    })
+    expect(frenado.ok).toBe(false)
+    if (!frenado.ok) expect(frenado.error.code).toBe('presupuesto_agotado')
+  })
 })
 
 /* Tipos: pedirle al agente X la salida del agente Y no debe compilar. */

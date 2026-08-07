@@ -145,6 +145,15 @@ export interface RunContext {
    * entorno cargadas; quien compone la corrida lo lee de `serverEnv()`.
    */
   readonly configuredProvider: ProviderName
+  /**
+   * Salta la puerta del interruptor `enabled` — y SOLO esa.
+   *
+   * Lo usa "preparar el mes", que corre la cadena aunque el agente esté apagado
+   * para el cliente. NO salta la política (de ahí sale el tope) ni el
+   * presupuesto: encender de golpe no puede volverse gastar sin límite. Un
+   * agente sin política sigue sin correr, y uno que ya tocó su tope tampoco.
+   */
+  readonly omitirInterruptor?: boolean
   readonly signal?: AbortSignal
 }
 
@@ -228,7 +237,7 @@ export async function runAgent<K extends AgentKey>(
       },
     }
   }
-  if (!policy.enabled) {
+  if (!policy.enabled && !ctx.omitirInterruptor) {
     return {
       ok: false,
       runId: null,

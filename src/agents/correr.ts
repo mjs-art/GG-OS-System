@@ -76,6 +76,7 @@ export async function correrRedactor(
   admin: SupabaseClient<Database>,
   pieceId: string,
   userId: string,
+  opciones: { omitirInterruptor?: boolean } = {},
 ): Promise<ResultadoCorrida> {
   const { data: pieza, error } = await admin
     .from('pieces')
@@ -194,6 +195,7 @@ export async function correrRedactor(
     store: createAgentStore(admin),
     clock: systemClock,
     configuredProvider: serverEnv().AGENTS_PROVIDER,
+    ...(opciones.omitirInterruptor ? { omitirInterruptor: true } : {}),
   })
 
   if (!result.ok) {

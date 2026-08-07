@@ -18,6 +18,7 @@ import {
   type ResultadoAsset,
 } from '@/components/planner/acciones'
 import { SegmentedControl } from '@/components/planner/controles'
+import { PrepararMesBoton } from '@/components/planner/preparar-mes-boton'
 import {
   DrawerPieza,
   type CambioDePieza,
@@ -561,17 +562,20 @@ export function PlannerCliente({
             {formatMonthKey(mes)}
           </p>
         </div>
-        <SegmentedControl
-          etiqueta="Sub-vista del planner"
-          valor={vista}
-          onCambio={setVista}
-          opciones={SUB_VISTAS.map((v) => ({
-            id: v.id,
-            label: v.label,
-            ...(v.id === 'stories' ? { contador: storiesIniciales.length } : {}),
-            ...(v.id === 'grid' || v.id === 'tabla' ? { contador: piezas.length } : {}),
-          }))}
-        />
+        <div className="flex flex-wrap items-center gap-3">
+          <PrepararMesBoton clientId={cliente.id} month={mes} />
+          <SegmentedControl
+            etiqueta="Sub-vista del planner"
+            valor={vista}
+            onCambio={setVista}
+            opciones={SUB_VISTAS.map((v) => ({
+              id: v.id,
+              label: v.label,
+              ...(v.id === 'stories' ? { contador: storiesIniciales.length } : {}),
+              ...(v.id === 'grid' || v.id === 'tabla' ? { contador: piezas.length } : {}),
+            }))}
+          />
+        </div>
       </header>
 
       {vista === 'grid' && (
