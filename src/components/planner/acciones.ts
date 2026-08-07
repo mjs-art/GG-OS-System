@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
+import { urlMostrableDeEnlace } from '@/domain/drive'
 import {
   assetUrlDeRuta,
   BUCKET_PIEZAS,
@@ -513,7 +514,9 @@ async function firmar(
   supabase: ClienteSupabase,
   nuevo: { assetUrl: string; assetSource: 'subido' | 'enlace' },
 ): Promise<string | null> {
-  if (nuevo.assetSource === 'enlace') return nuevo.assetUrl
+  // Un enlace de Drive se pinta por su miniatura, no por el link del visor. Se
+  // transforma solo para mostrar; lo que se guardó en la pieza es el link crudo.
+  if (nuevo.assetSource === 'enlace') return urlMostrableDeEnlace(nuevo.assetUrl)
 
   const { data } = await supabase.storage
     .from(BUCKET_PIEZAS)
