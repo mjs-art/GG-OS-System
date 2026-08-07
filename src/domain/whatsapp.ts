@@ -68,6 +68,16 @@ export type EntranteWhatsApp = z.infer<typeof entranteSchema>
 export type ReporteWhatsApp = z.infer<typeof reporteSchema>
 export type MediaWhatsApp = z.infer<typeof mediaSchema>
 
+/**
+ * Lee una lista de adjuntos guardada en jsonb sin confiar en su forma. Es
+ * nuestro dato, pero jsonb no tiene tipo: un adjunto viejo con otra forma no
+ * debe tumbar la bandeja, así que lo que no cumple se descarta.
+ */
+export function parsearMedia(value: unknown): MediaWhatsApp[] {
+  const parsed = z.array(mediaSchema).safeParse(value ?? [])
+  return parsed.success ? parsed.data : []
+}
+
 /* -------------------------------------------------------------------------- */
 /*  Vistas de la bandeja de salientes                                          */
 /*                                                                             */
@@ -85,7 +95,8 @@ export interface SalienteWhatsApp {
   status: 'borrador' | 'aprobado'
   /** El agente que lo redactó, o `null` si lo escribió una persona. */
   authoredByAgent: string | null
-  mediaCount: number
+  /** Fotos y propuestas adjuntas, en el orden en que se anexaron. */
+  media: MediaWhatsApp[]
   createdAt: string
 }
 
