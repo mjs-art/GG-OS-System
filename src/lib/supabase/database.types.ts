@@ -2373,6 +2373,241 @@ export type Database = {
           },
         ]
       }
+      wa_conversations: {
+        Row: {
+          client_id: string
+          created_at: string
+          display_name: string | null
+          id: string
+          last_message_at: string | null
+          org_id: string
+          updated_at: string
+          wa_phone: string
+        }
+        Insert: {
+          client_id: string
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          last_message_at?: string | null
+          org_id: string
+          updated_at?: string
+          wa_phone: string
+        }
+        Update: {
+          client_id?: string
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          last_message_at?: string | null
+          org_id?: string
+          updated_at?: string
+          wa_phone?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "wa_conversations_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "wa_conversations_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      wa_feedback: {
+        Row: {
+          body: string
+          client_id: string
+          conversation_id: string | null
+          created_at: string
+          id: string
+          kind: string
+          message_id: string | null
+          month: string | null
+          org_id: string
+          piece_id: string | null
+          resolution: string | null
+          resolved_at: string | null
+          resolved_by: string | null
+        }
+        Insert: {
+          body: string
+          client_id: string
+          conversation_id?: string | null
+          created_at?: string
+          id?: string
+          kind?: string
+          message_id?: string | null
+          month?: string | null
+          org_id: string
+          piece_id?: string | null
+          resolution?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+        }
+        Update: {
+          body?: string
+          client_id?: string
+          conversation_id?: string | null
+          created_at?: string
+          id?: string
+          kind?: string
+          message_id?: string | null
+          month?: string | null
+          org_id?: string
+          piece_id?: string | null
+          resolution?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "wa_feedback_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "wa_feedback_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "wa_conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "wa_feedback_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "wa_messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "wa_feedback_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "wa_feedback_piece_id_fkey"
+            columns: ["piece_id"]
+            isOneToOne: false
+            referencedRelation: "pieces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      wa_messages: {
+        Row: {
+          approved_at: string | null
+          approved_by: string | null
+          authored_by_agent:
+            | "estratega"
+            | "analista"
+            | "guionista"
+            | "redactor"
+            | "editor_marca"
+            | "pautero"
+            | "auditor"
+            | "cuenta"
+            | null
+          body: string | null
+          client_id: string
+          conversation_id: string
+          created_at: string
+          direction: string
+          id: string
+          media: Json
+          org_id: string
+          piece_ids: string[]
+          sent_at: string | null
+          status: string
+          wa_message_id: string | null
+        }
+        Insert: {
+          approved_at?: string | null
+          approved_by?: string | null
+          authored_by_agent?:
+            | "estratega"
+            | "analista"
+            | "guionista"
+            | "redactor"
+            | "editor_marca"
+            | "pautero"
+            | "auditor"
+            | "cuenta"
+            | null
+          body?: string | null
+          client_id: string
+          conversation_id: string
+          created_at?: string
+          direction: string
+          id?: string
+          media?: Json
+          org_id: string
+          piece_ids?: string[]
+          sent_at?: string | null
+          status: string
+          wa_message_id?: string | null
+        }
+        Update: {
+          approved_at?: string | null
+          approved_by?: string | null
+          authored_by_agent?:
+            | "estratega"
+            | "analista"
+            | "guionista"
+            | "redactor"
+            | "editor_marca"
+            | "pautero"
+            | "auditor"
+            | "cuenta"
+            | null
+          body?: string | null
+          client_id?: string
+          conversation_id?: string
+          created_at?: string
+          direction?: string
+          id?: string
+          media?: Json
+          org_id?: string
+          piece_ids?: string[]
+          sent_at?: string | null
+          status?: string
+          wa_message_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "wa_messages_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "wa_messages_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "wa_conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "wa_messages_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       campaigns_para_cliente: {

@@ -87,15 +87,16 @@ const serverSchema = z.object({
   APIFY_API_TOKEN: z.string().optional(),
 
   /**
-   * WhatsApp Business (Meta Cloud API). Sin estas, el módulo de WhatsApp no
-   * envía ni recibe y la app sigue funcionando igual. NUNCA se commitean
-   * (regla #4): el número del cliente vive en la base como dato de contacto,
-   * pero el token, el verify token y el app secret solo en .env.local.
+   * WhatsApp vía n8n. n8n tiene las credenciales de Meta (regla #4: no viven
+   * aquí). La app solo necesita el secreto compartido para autenticar el tráfico
+   * entre n8n y la app, y la URL del webhook de envío de n8n.
+   *   · N8N_INBOUND_SECRET: n8n lo manda en cada llamada entrante; la ruta lo
+   *     compara. Sin él configurado, la ruta rechaza todo — nada entra a ciegas.
+   *   · N8N_SEND_WEBHOOK_URL: a dónde la app pide enviar un saliente ya aprobado.
+   *     Sin ella se puede recibir pero no enviar.
    */
-  WHATSAPP_PHONE_NUMBER_ID: z.string().optional(),
-  WHATSAPP_TOKEN: z.string().optional(),
-  WHATSAPP_VERIFY_TOKEN: z.string().optional(),
-  WHATSAPP_APP_SECRET: z.string().optional(),
+  N8N_INBOUND_SECRET: z.string().optional(),
+  N8N_SEND_WEBHOOK_URL: z.url().optional(),
 })
 
 let cachedServerEnv: z.infer<typeof serverSchema> | null = null
