@@ -2,7 +2,8 @@
 
 import { useRouter } from 'next/navigation'
 import { useRef, useState, useTransition } from 'react'
-import { aprobarYEnviarWhatsApp } from '@/components/whatsapp/acciones'
+import { aprobarYEnviarWhatsApp, registrarRetro } from '@/components/whatsapp/acciones'
+import { RetroAbierta } from '@/components/whatsapp/retro-abierta'
 import {
   AreaTexto,
   Button,
@@ -12,7 +13,7 @@ import {
   EmptyState,
   Mono,
 } from '@/components/ui/primitives'
-import type { HiloWhatsApp, SalienteWhatsApp } from '@/domain/whatsapp'
+import type { HiloWhatsApp, RetroWhatsApp, SalienteWhatsApp } from '@/domain/whatsapp'
 import { relativeDays } from '@/lib/time'
 
 /**
@@ -32,9 +33,11 @@ export interface BandejaSalientesProps {
   hilos: HiloWhatsApp[]
   /** ISO del reloj del servidor: el cliente no inventa fechas. */
   ahora: string
+  /** La retro del cliente que falta resolver, debajo de los salientes. */
+  retros: RetroWhatsApp[]
 }
 
-export function BandejaSalientes({ hilos, ahora }: BandejaSalientesProps) {
+export function BandejaSalientes({ hilos, ahora, retros }: BandejaSalientesProps) {
   const total = hilos.reduce((suma, h) => suma + h.salientes.length, 0)
 
   return (
@@ -66,6 +69,8 @@ export function BandejaSalientes({ hilos, ahora }: BandejaSalientesProps) {
           ))}
         </ul>
       )}
+
+      <RetroAbierta retros={retros} />
     </div>
   )
 }
@@ -74,8 +79,33 @@ function HiloTarjeta({ hilo, ahora }: { hilo: HiloWhatsApp; ahora: string }) {
   const router = useRouter()
   const [enviando, setEnviando] = useState<string | null>(null)
   const [aviso, setAviso] = useState<{ id: string; mensaje: string } | null>(null)
+  const [retroEstado, setRetroEstado] = useState<'idle' | 'guardada'>('idle')
+  const [retroError, setRetroError] = useState<string | null>(null)
   const [, iniciarEnvio] = useTransition()
   const textos = useRef(new Map<string, HTMLTextAreaElement>())
+
+  function guardarRetro() {
+    const entrante = hilo.ultimoEntrante
+    if (!entrante?.body) return
+    const texto = entrante.body
+    const mensajeId = entrante.id
+    setRetroError(null)
+
+    iniciarEnvio(async () => {
+      const resultado = await registrarRetro({
+        conversationId: hilo.conversationId,
+        messageId: mensajeId,
+        body: texto,
+        kind: 'cambio',
+      })
+      if (resultado.ok) {
+        setRetroEstado('guardada')
+        router.refresh()
+        return
+      }
+      setRetroError(resultado.mensaje)
+    })
+  }
 
   function aprobar(saliente: SalienteWhatsApp) {
     if (enviando) return
@@ -104,14 +134,25 @@ function HiloTarjeta({ hilo, ahora }: { hilo: HiloWhatsApp; ahora: string }) {
       </div>
 
       {hilo.ultimoEntrante && (
-        <div className="border-line border-l-[3px] pl-3">
+        <div className="border-line flex flex-col gap-2 border-l-[3px] pl-3">
           <Mono className="text-fg-muted">
             El cliente escribió ·{' '}
             {relativeDays(new Date(hilo.ultimoEntrante.createdAt), new Date(ahora))}
           </Mono>
-          <p className="text-fg mt-1 text-[13px]">
+          <p className="text-fg text-[13px]">
             {hilo.ultimoEntrante.body ?? '(mandó un archivo, sin texto)'}
           </p>
+          {hilo.ultimoEntrante.body &&
+            (retroEstado === 'guardada' ? (
+              <Mono className="text-ok text-[11px]">Guardado en retro</Mono>
+            ) : (
+              <div className="flex items-center gap-2">
+                <Button variant="ghost" onClick={guardarRetro}>
+                  Guardar como retro
+                </Button>
+                {retroError && <Mono className="text-accent-hot text-[11px]">{retroError}</Mono>}
+              </div>
+            ))}
         </div>
       )}
 
