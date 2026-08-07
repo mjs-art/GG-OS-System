@@ -37,6 +37,31 @@ const PIPELINE_VACIO: Record<PieceStatus, number> = {
   publicado: 0,
 }
 
+export interface ClienteParaBuscar {
+  slug: string
+  name: string
+}
+
+/**
+ * Los clientes en su forma más ligera: solo lo que la paleta de comandos
+ * necesita para llevarte a uno. Sin mes, sin piezas, sin joins — se lee en cada
+ * página del estudio (va en el layout), así que tiene que ser barata.
+ */
+export async function listarClientesParaBuscar(): Promise<ClienteParaBuscar[]> {
+  const supabase = await createClient()
+
+  const { data, error } = await supabase
+    .from('clients')
+    .select('slug, name')
+    .is('archived_at', null)
+    .order('name')
+
+  // La paleta es una comodidad, no una pantalla: si la lectura falla, se abre
+  // igual con los destinos fijos en vez de tumbar el layout entero.
+  if (error) return []
+  return (data ?? []).map((c) => ({ slug: c.slug, name: c.name }))
+}
+
 export async function listarClientes(mes: MonthKey): Promise<ResumenCliente[]> {
   const supabase = await createClient()
 

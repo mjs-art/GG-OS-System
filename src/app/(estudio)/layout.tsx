@@ -1,5 +1,7 @@
+import { PaletaComandos } from '@/components/nav/paleta-comandos'
 import { Sidebar } from '@/components/nav/sidebar'
 import { SwitchTema } from '@/components/ui/switch-tema'
+import { listarClientesParaBuscar } from '@/lib/datos/clientes'
 import { createClient } from '@/lib/supabase/server'
 
 /**
@@ -37,13 +39,14 @@ async function aceptarInvitacionesPendientes(): Promise<void> {
 
 export default async function EstudioLayout({ children }: { children: React.ReactNode }) {
   await aceptarInvitacionesPendientes()
-  const pendientes = await contarPendientes()
+  const [pendientes, clientes] = await Promise.all([contarPendientes(), listarClientesParaBuscar()])
 
   return (
     <div className="flex min-h-dvh">
       <Sidebar pendientes={pendientes} />
       <div className="flex min-w-0 flex-1 flex-col">
-        <div className="border-line flex h-14 shrink-0 items-center justify-end gap-3 border-b px-6">
+        <div className="border-line flex h-14 shrink-0 items-center justify-between gap-3 border-b px-6">
+          <PaletaComandos clientes={clientes} />
           <SwitchTema />
         </div>
         {children}

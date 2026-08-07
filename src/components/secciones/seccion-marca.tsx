@@ -2,6 +2,7 @@ import { ChevronRight } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { Card, Chip, Display, EmptyState, Mono } from '@/components/ui/primitives'
 import { AGENT_LABEL, PIECE_FORMAT_LABEL } from '@/domain/labels'
+import type { SugerenciaPalabra } from '@/domain/aprendizaje'
 import type { Cliente } from '@/lib/datos/clientes'
 import type {
   AprendizajeDeMarca,
@@ -16,6 +17,7 @@ import { etiquetaDeCampo } from './etiquetas'
 import { FormularioRegla } from './formulario-regla'
 import { ListadoReglas } from './listado-reglas'
 import { NotaDeMarcaSection } from './nota-de-marca'
+import { SugerenciasAprendizaje } from './sugerencias-aprendizaje'
 
 /**
  * § Marca — el documento del que se alimentan los agentes.
@@ -36,6 +38,7 @@ export function SeccionMarca({
   versiones,
   reglas,
   aprendizaje,
+  sugerencias,
   notaDeMarca,
 }: {
   cliente: Cliente
@@ -43,6 +46,7 @@ export function SeccionMarca({
   versiones: VersionDeMarca[]
   reglas: ReglaDura[]
   aprendizaje: AprendizajeDeMarca
+  sugerencias: SugerenciaPalabra[]
   notaDeMarca: NotaDeMarca | null
 }) {
   return (
@@ -248,6 +252,13 @@ export function SeccionMarca({
       />
 
       {/* --- Aprendizaje ---------------------------------------------------- */}
+
+      <SugerenciasAprendizaje
+        sugerencias={sugerencias}
+        clientId={cliente.id}
+        orgId={cliente.orgId}
+        slug={cliente.slug}
+      />
 
       <BloqueAprendizaje aprendizaje={aprendizaje} pilares={cliente.pilares} />
     </>

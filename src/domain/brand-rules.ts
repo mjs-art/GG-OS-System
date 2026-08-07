@@ -83,8 +83,15 @@ function copyFields(piece: CheckablePiece): Array<{ field: string; value: string
 /**
  * Normaliza el acento antes de comparar. "unico" y "único" son la misma palabra
  * prohibida, y el cliente que escribió la regla no va a listar las dos.
+ *
+ * Se exporta porque el detector de `@/domain/aprendizaje` propone palabras
+ * prohibidas a partir de lo que una persona borra, y tiene que normalizar
+ * EXACTAMENTE igual que este verificador: si sugiriera "único" con una
+ * normalización distinta de la que después lo bloquea, la regla propuesta y la
+ * regla aplicada no serían la misma. Esa clase de divergencia ya mordió una vez
+ * con la traducción de parámetros; una sola definición la cierra.
  */
-function fold(value: string): string {
+export function fold(value: string): string {
   return value.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
 }
 

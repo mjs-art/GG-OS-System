@@ -1,6 +1,7 @@
 import 'server-only'
 
 import { type CodeRule, normalizarParamsDeRegla } from '@/domain/brand-rules'
+import { urlMostrableDeEnlace } from '@/domain/drive'
 import { BUCKET_PIEZAS, rutaDeStorage } from '@/domain/planner'
 import type { AssetSource } from '@/lib/datos/clientes'
 import { createClient } from '@/lib/supabase/server'
@@ -141,7 +142,10 @@ export async function urlsDeAssets(
 
   for (const pieza of piezas) {
     if (!pieza.assetUrl) continue
-    if (pieza.assetSource === 'enlace') urls[pieza.id] = pieza.assetUrl
+    // Un enlace externo se pinta tal cual —salvo Drive, cuyo link de compartir
+    // no es una imagen y se cambia por su miniatura. El resto (Canva, Dropbox,
+    // una imagen directa) pasa sin tocar.
+    if (pieza.assetSource === 'enlace') urls[pieza.id] = urlMostrableDeEnlace(pieza.assetUrl)
     else rutas.push({ pieceId: pieza.id, ruta: rutaDeStorage(pieza.assetUrl) })
   }
 

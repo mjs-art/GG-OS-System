@@ -403,6 +403,76 @@ export async function agregarReglaDura(formData: FormData): Promise<EstadoRegla>
 }
 
 /* ==========================================================================
+   § MARCA — promover una corrección a regla dura
+   ========================================================================== */
+
+const promoverSchema = idsSchema.extend({
+  palabra: z
+    .string()
+    .trim()
+    .min(1, 'No hay palabra que promover.')
+    .max(80, 'Esa cadena es demasiado larga para una palabra prohibida.'),
+})
+
+/**
+ * Convierte una palabra que Ana borra siempre en una regla dura léxica.
+ *
+ * Es el otro extremo del lazo que abre `@/domain/aprendizaje`: la detección
+ * propone, esta acción ejecuta la decisión humana. Se escribe en `brand_rules`
+ * —no en el Context Card— porque ahí es donde una palabra prohibida deja de ser
+ * un consejo para el prompt y se vuelve algo que el Editor de marca verifica por
+ * código, sin poder convencerse de lo contrario.
+ *
+ * Severidad `media` a propósito: una palabra promovida AVISA, no bloquea la
+ * pieza. Bloquear (crítica) es una decisión aparte que Ana toma con el lápiz si
+ * de verdad esa palabra no puede salir nunca. Promover no debe poder frenar un
+ * mes por sí solo.
+ */
+export async function promoverPalabraProhibida(formData: FormData): Promise<EstadoRegla> {
+  const parsed = promoverSchema.safeParse({
+    clientId: formData.get('clientId'),
+    orgId: formData.get('orgId'),
+    slug: formData.get('slug'),
+    palabra: formData.get('palabra'),
+  })
+
+  if (!parsed.success) {
+    return { status: 'error', message: parsed.error.issues[0]?.message ?? 'Revisa la palabra.' }
+  }
+
+  const { clientId, orgId, slug, palabra } = parsed.data
+  const params = { kind: 'banned_words' as const, words: [palabra] }
+
+  // Se valida contra el mismo esquema que lee el verificador. Si no pasara, la
+  // regla entraría a la base para aparecer como "mal configurada" para siempre.
+  if (!codeRuleParams.safeParse(params).success) {
+    return { status: 'error', message: 'Esa palabra no se pudo convertir en regla.' }
+  }
+
+  const supabase = await createClient()
+
+  const { error } = await supabase.from('brand_rules').insert({
+    org_id: orgId,
+    client_id: clientId,
+    kind: 'lexico',
+    rule: `No usar "${palabra}".`,
+    severity: 'media',
+    check_by: 'codigo',
+    params,
+  })
+
+  if (error) {
+    return { status: 'error', message: `No se pudo crear la regla: ${error.message}` }
+  }
+
+  refrescarCliente(slug)
+  return {
+    status: 'guardada',
+    message: `"${palabra}" ya es regla dura. El Editor de marca la marca desde la próxima revisión.`,
+  }
+}
+
+/* ==========================================================================
    § PRIVADO — notas
    ========================================================================== */
 
