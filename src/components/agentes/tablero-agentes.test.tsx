@@ -24,6 +24,7 @@ function metricas(key: MetricasAgente['key'], extra: Partial<MetricasAgente> = {
     corridasMedidas: 0,
     costoMesCents: 0,
     topeMesCents: 500,
+    avisoPresupuesto: 'ok',
     encendidoEn: 0,
     clientesConPolitica: 1,
     sparkline: Array.from({ length: 14 }, () => 0),
@@ -69,5 +70,33 @@ describe('el tablero de agentes', () => {
 
     const enlaces = screen.getAllByRole('link', { name: 'Ver corridas' })
     expect(enlaces[0]).toHaveAttribute('href', '/agentes/estratega?cliente=bar-ficticio')
+  })
+
+  it('avisa cuando un agente cruza el 80% del tope, y cuando lo alcanza', () => {
+    const agentes = AGENT_KEYS.map((key) => {
+      if (key === 'estratega')
+        return metricas(key, { avisoPresupuesto: 'aviso', costoMesCents: 410 })
+      if (key === 'redactor')
+        return metricas(key, { avisoPresupuesto: 'agotado', costoMesCents: 500 })
+      return metricas(key)
+    })
+    render(<TableroAgentes panel={panel({ agentes })} />)
+
+    expect(screen.getByText('80% del tope')).toBeInTheDocument()
+    expect(screen.getByText('tope del mes alcanzado')).toBeInTheDocument()
+    expect(
+      screen.getByText(/no corre hasta el próximo mes o hasta subirle el tope/i),
+    ).toBeInTheDocument()
+  })
+
+  it('un agente sin tope configurado no finge estar agotado', () => {
+    // topeMesCents 0 = sin política. estadoDePresupuesto lo llamaría "agotado",
+    // pero la tarjeta no debe pintar alarma donde no hay nada configurado.
+    const agentes = AGENT_KEYS.map((key) =>
+      metricas(key, { avisoPresupuesto: 'agotado', topeMesCents: 0, costoMesCents: 0 }),
+    )
+    render(<TableroAgentes panel={panel({ agentes })} />)
+
+    expect(screen.queryByText('tope del mes alcanzado')).not.toBeInTheDocument()
   })
 })

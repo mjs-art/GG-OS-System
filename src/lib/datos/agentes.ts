@@ -4,6 +4,7 @@ import { z } from 'zod'
 import { AGENT_KEYS, type AgentKey } from '@/agents/contracts'
 import { AGENTS } from '@/agents/registry'
 import { PIECE_FORMAT_LABEL } from '@/domain/labels'
+import { estadoDePresupuesto, type EstadoPresupuesto } from '@/domain/presupuesto'
 import { fechaEnEstudio, inicioDelDiaEnEstudio, inicioDelMesEnEstudio } from '@/lib/datos/bandeja'
 import { createClient } from '@/lib/supabase/server'
 import type { Json } from '@/lib/supabase/database.types'
@@ -42,6 +43,13 @@ export interface MetricasAgente {
   costoMesCents: number
   /** Suma de `agent_policies.monthly_cap_cents` de los clientes en pantalla. */
   topeMesCents: number
+  /**
+   * En qué franja del tope cae el gasto del mes: `ok`, `aviso` (≥80%) o
+   * `agotado` (≥100%). Derivado de costo/tope con la misma regla que usa el
+   * runner para negarse a correr, así el chip del tablero y la puerta del
+   * presupuesto nunca discrepan por un redondeo.
+   */
+  avisoPresupuesto: EstadoPresupuesto
   encendidoEn: number
   clientesConPolitica: number
   /** Corridas por día, la última posición es hoy. Siempre `DIAS_SPARKLINE` largo. */
@@ -162,6 +170,9 @@ export async function panelAgentes(ahora: Date, clienteSlug?: string): Promise<P
       null,
     )
 
+    const costoMesCents = corridasDelMes.reduce((suma, r) => suma + r.cost_cents, 0)
+    const topeMesCents = politicas.reduce((suma, p) => suma + p.monthly_cap_cents, 0)
+
     return {
       key,
       estado: estadoDe(corridas),
@@ -172,8 +183,9 @@ export async function panelAgentes(ahora: Date, clienteSlug?: string): Promise<P
           ? Math.min(100, Math.round((corridasEditadas / corridasMedidas) * 100))
           : null,
       corridasMedidas,
-      costoMesCents: corridasDelMes.reduce((suma, r) => suma + r.cost_cents, 0),
-      topeMesCents: politicas.reduce((suma, p) => suma + p.monthly_cap_cents, 0),
+      costoMesCents,
+      topeMesCents,
+      avisoPresupuesto: estadoDePresupuesto(costoMesCents, topeMesCents),
       encendidoEn: politicas.filter((p) => p.enabled).length,
       clientesConPolitica: politicas.length,
       sparkline,

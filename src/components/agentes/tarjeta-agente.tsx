@@ -3,7 +3,7 @@ import { AGENTS } from '@/agents/registry'
 import { dolares, porcentajeDelTope } from '@/components/agentes/formato'
 import { Sparkline } from '@/components/agentes/sparkline'
 import { SwitchAgente } from '@/components/agentes/switch-agente'
-import { Display, Mono, ProgressBar } from '@/components/ui/primitives'
+import { Chip, Display, Mono, ProgressBar } from '@/components/ui/primitives'
 import { AGENT_LABEL } from '@/domain/labels'
 import { cn } from '@/lib/cn'
 import type { ClienteDeAgentes, EstadoAgente, MetricasAgente } from '@/lib/datos/agentes'
@@ -31,8 +31,12 @@ export interface TarjetaAgenteProps {
 }
 
 export function TarjetaAgente({ metricas, cliente, encendidoAqui, href }: TarjetaAgenteProps) {
-  const { key, estado, trabajosHoy, escalamientosAbiertos, tasaEdicionPct } = metricas
+  const { key, estado, trabajosHoy, escalamientosAbiertos, tasaEdicionPct, avisoPresupuesto } =
+    metricas
   const pctTope = porcentajeDelTope(metricas.costoMesCents, metricas.topeMesCents)
+  // Sin tope configurado (agente sin política) no hay nada de qué avisar: un
+  // gasto de 0 contra tope 0 no es "agotado", es "sin configurar".
+  const hayAviso = metricas.topeMesCents > 0 && avisoPresupuesto !== 'ok'
 
   return (
     <article className="border-line bg-surface flex flex-col gap-5 rounded-xs border p-5">
@@ -84,8 +88,26 @@ export function TarjetaAgente({ metricas, cliente, encendidoAqui, href }: Tarjet
             className="mt-1.5"
             value={metricas.costoMesCents}
             max={Math.max(metricas.topeMesCents, 1)}
-            tone={pctTope >= 80 ? 'accent' : 'muted'}
+            tone={hayAviso ? 'accent' : 'muted'}
           />
+          {hayAviso && (
+            <div className="mt-2 flex flex-col gap-1">
+              {avisoPresupuesto === 'agotado' ? (
+                <Chip tone="critical" className="self-start">
+                  tope del mes alcanzado
+                </Chip>
+              ) : (
+                <Chip tone="high" className="self-start">
+                  80% del tope
+                </Chip>
+              )}
+              {avisoPresupuesto === 'agotado' && (
+                <Mono className="text-fg-muted normal-case">
+                  El agente no corre hasta el próximo mes o hasta subirle el tope.
+                </Mono>
+              )}
+            </div>
+          )}
         </div>
       </dl>
 
