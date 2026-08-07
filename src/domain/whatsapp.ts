@@ -95,8 +95,20 @@ export interface HiloWhatsApp {
   clienteNombre: string
   waPhone: string
   /** El último mensaje del cliente, para juzgar la respuesta sin cambiar de vista. */
-  ultimoEntrante: { body: string | null; createdAt: string } | null
+  ultimoEntrante: { id: string; body: string | null; createdAt: string } | null
   salientes: SalienteWhatsApp[]
+}
+
+/** La clase de retro, espejo del CHECK de `wa_feedback`. */
+export type TipoRetro = 'aprobacion' | 'cambio' | 'comentario'
+
+/** Una retro del cliente todavía sin resolver. */
+export interface RetroWhatsApp {
+  id: string
+  clienteNombre: string
+  body: string
+  kind: TipoRetro
+  createdAt: string
 }
 
 /**
