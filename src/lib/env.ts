@@ -85,6 +85,17 @@ const serverSchema = z.object({
    * https://console.apify.com/settings/integrations
    */
   APIFY_API_TOKEN: z.string().optional(),
+
+  /**
+   * WhatsApp Business (Meta Cloud API). Sin estas, el módulo de WhatsApp no
+   * envía ni recibe y la app sigue funcionando igual. NUNCA se commitean
+   * (regla #4): el número del cliente vive en la base como dato de contacto,
+   * pero el token, el verify token y el app secret solo en .env.local.
+   */
+  WHATSAPP_PHONE_NUMBER_ID: z.string().optional(),
+  WHATSAPP_TOKEN: z.string().optional(),
+  WHATSAPP_VERIFY_TOKEN: z.string().optional(),
+  WHATSAPP_APP_SECRET: z.string().optional(),
 })
 
 let cachedServerEnv: z.infer<typeof serverSchema> | null = null

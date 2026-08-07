@@ -1,5 +1,6 @@
 'use client'
 
+import { useRouter } from 'next/navigation'
 import { useActionState, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { recalcularVolumen, type EstadoVolumen } from '@/components/volumen/acciones'
@@ -89,12 +90,16 @@ function ModalRecalcular({
   capacidadDeclarada: number
   onCerrar: () => void
 }) {
+  const router = useRouter()
   const [estado, formAction, pendiente] = useActionState(recalcularVolumen, ESTADO_INICIAL)
   const [capacidad, setCapacidad] = useState(capacidadDeclarada)
   const [objetivos, setObjetivos] = useState<Record<string, number>>(() =>
     Object.fromEntries(pilares.map((p) => [p.id, Math.round(p.objetivoPct)])),
   )
   const dialogo = useRef<HTMLDivElement>(null)
+  // El efecto de "guardado" corre en cada render mientras el estado siga en
+  // 'guardado'; sin este candado dispararía al Estratega más de una vez.
+  const yaDisparado = useRef(false)
 
   // El foco entra al modal al abrirlo. Sin esto, quien navega con teclado sigue
   // parado en el botón de atrás y no se entera de que se abrió nada.
@@ -103,11 +108,55 @@ function ModalRecalcular({
   }, [])
 
   useEffect(() => {
-    if (estado.status === 'guardado') {
-      toast(estado.message ?? 'Plan guardado.')
-      onCerrar()
-    }
-  }, [estado, onCerrar])
+    if (estado.status !== 'guardado' || yaDisparado.current) return
+    yaDisparado.current = true
+
+    // Guardar las restricciones es la mitad; la otra es correr al Estratega para
+    // que arme la propuesta con sus razones. Antes esto se quedaba en "guardado"
+    // y el plan nunca traía el porqué hasta una corrida manual que nadie hacía.
+    const id = toast.loading('Restricciones guardadas. Corriendo al Estratega…', {
+      description: 'Arma el plan del mes con sus razones contra tu capacidad y objetivos.',
+    })
+
+    void (async () => {
+      try {
+        const res = await fetch('/api/jobs/estratega', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ clientId, month: mes }),
+        })
+        const r = (await res.json()) as
+          | { ok: true; tipo: 'plan'; total: number }
+          | { ok: true; tipo: 'escalado'; pregunta: string }
+          | { ok: false; message: string }
+
+        if (r.ok && r.tipo === 'plan') {
+          toast.success(`Plan listo: ${r.total} piezas`, {
+            id,
+            description: 'Con sus razones en “Por qué esta mezcla”.',
+          })
+        } else if (r.ok && r.tipo === 'escalado') {
+          toast('El Estratega tiene una pregunta', {
+            id,
+            description: `${r.pregunta} — respóndela en la Bandeja.`,
+          })
+        } else {
+          toast.error('El plan quedó a medias', {
+            id,
+            description: 'message' in r ? r.message : 'No se pudo correr el Estratega.',
+          })
+        }
+      } catch {
+        toast.error('No se pudo correr el Estratega', {
+          id,
+          description: 'Falló la conexión. Vuelve a intentarlo.',
+        })
+      } finally {
+        router.refresh()
+        onCerrar()
+      }
+    })()
+  }, [estado, onCerrar, clientId, mes, router])
 
   const suma = Object.values(objetivos).reduce((a, b) => a + b, 0)
   const cuadra = Math.abs(suma - 100) <= 1
@@ -232,7 +281,7 @@ function ModalRecalcular({
 
           <div className="flex flex-wrap items-center gap-3">
             <Button variant="primary" type="submit" disabled={pendiente || !cuadra}>
-              {pendiente ? 'Guardando…' : 'Guardar restricciones'}
+              {pendiente ? 'Guardando…' : 'Guardar y recalcular'}
             </Button>
             <Button variant="ghost" type="button" onClick={onCerrar}>
               Cancelar
@@ -240,8 +289,8 @@ function ModalRecalcular({
           </div>
 
           <p className="text-fg-muted text-[13px]">
-            Esto guarda tu capacidad y tus objetivos. La propuesta con sus razones la escribe el
-            Estratega; la app no inventa un plan.
+            Guarda tu capacidad y tus objetivos y corre al Estratega contra ellos. La propuesta con
+            sus razones la escribe él; la app no inventa un plan.
           </p>
         </form>
       </div>

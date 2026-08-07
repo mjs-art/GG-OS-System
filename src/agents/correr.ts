@@ -8,9 +8,15 @@ import { createMockProvider } from '@/agents/providers/mock'
 import type { AgentInput } from '@/agents/registry'
 import { runAgent, type AgentProvider } from '@/agents/runner'
 import { createAgentStore } from '@/agents/store'
+import {
+  rendimientoPorFormato,
+  rendimientoPorPilar,
+  type MedicionDePieza,
+} from '@/domain/estratega-entrada'
+import type { PieceFormat, StoryKind } from '@/domain/labels'
 import { serverEnv } from '@/lib/env'
 import type { Database, Json } from '@/lib/supabase/database.types'
-import { systemClock } from '@/lib/time'
+import { addMonths, systemClock, type MonthKey } from '@/lib/time'
 
 /**
  * El compositor de la corrida del Redactor sobre una pieza.
@@ -251,4 +257,299 @@ export async function correrRedactor(
     runId: result.runId,
     costCents: result.costCents,
   }
+}
+
+/* ==========================================================================
+   ESTRATEGA — el plan de volumen del mes
+   ========================================================================== */
+
+export type ResultadoEstratega =
+  | { readonly ok: true; readonly tipo: 'plan'; readonly total: number; readonly runId: string }
+  | {
+      readonly ok: true
+      readonly tipo: 'escalado'
+      readonly pregunta: string
+      readonly runId: string
+    }
+  | { readonly ok: false; readonly code: string; readonly message: string; readonly runId?: string }
+
+/**
+ * El enum de la base y el del contrato del Estratega no son el mismo conjunto:
+ * la base tiene `festividad` y `aniversario`, el contrato tiene `efemeride`.
+ * Este mapa los reconcilia en vez de mandar un valor que el schema rechaza —
+ * cosa que abortaría la corrida en la puerta de validación de entrada.
+ */
+const KIND_FECHA_A_CONTRATO: Record<string, 'temporada' | 'promocion' | 'evento' | 'efemeride'> = {
+  temporada: 'temporada',
+  promocion: 'promocion',
+  evento: 'evento',
+  festividad: 'efemeride',
+  aniversario: 'evento',
+}
+
+/**
+ * El compositor del Estratega: arma su entrada desde los resultados de los
+ * últimos ~90 días, la capacidad que Ana declaró y las fechas clave, corre el
+ * agente y escribe el plan a `volume_plans`.
+ *
+ * Igual que el Redactor: lee con el cliente admin porque la ruta ya autorizó
+ * antes con el de sesión. Escribe un borrador de plan; la aprobación es aparte.
+ *
+ * No inventa capacidad: si Ana no la ha declarado (en Recalcular volumen), no
+ * corre y lo dice. Un plan sin tope es justo el plan precioso e imposible que la
+ * columna `capacity_declared` existe para evitar.
+ */
+export async function correrEstratega(
+  admin: SupabaseClient<Database>,
+  clientId: string,
+  month: MonthKey,
+  userId: string,
+  opciones: { omitirInterruptor?: boolean } = {},
+): Promise<ResultadoEstratega> {
+  const { data: cliente, error: errorCliente } = await admin
+    .from('clients')
+    .select('id, org_id, tier, pillars ( id, name, target_pct )')
+    .eq('id', clientId)
+    .maybeSingle()
+
+  if (errorCliente)
+    return {
+      ok: false,
+      code: 'lectura',
+      message: `No se pudo leer el cliente: ${errorCliente.message}`,
+    }
+  if (!cliente) return { ok: false, code: 'no_encontrado', message: 'No se encontró el cliente.' }
+
+  const pilares = cliente.pillars ?? []
+  if (pilares.length === 0) {
+    return {
+      ok: false,
+      code: 'sin_pilares',
+      message:
+        'Este cliente no tiene pilares. El Estratega reparte el mes entre pilares; defínelos en Marca antes de correrlo.',
+    }
+  }
+
+  const { data: plan } = await admin
+    .from('volume_plans')
+    .select('capacity_declared, pillar_mix')
+    .eq('client_id', clientId)
+    .eq('month', month)
+    .maybeSingle()
+
+  if (!plan || plan.capacity_declared === null) {
+    return {
+      ok: false,
+      code: 'sin_capacidad',
+      message:
+        'Falta declarar la capacidad del mes. Ábrela en Recalcular volumen y guarda cuántas piezas puedes producir; el Estratega corre contra ese tope.',
+    }
+  }
+
+  const { data: card } = await admin
+    .from('context_card_versions')
+    .select(
+      'id, version, what_it_is, positioning, differentiators, faqs, audience, tone, banned_words, approved_examples, cadence, created_at',
+    )
+    .eq('client_id', clientId)
+    .order('version', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (!card) {
+    return {
+      ok: false,
+      code: 'sin_context_card',
+      message:
+        'Este cliente no tiene Context Card. El Estratega necesita la memoria de la marca para justificar el plan. Créala en Marca.',
+    }
+  }
+
+  const contextCard: ContextCard = {
+    id: card.id,
+    version: card.version,
+    whatItIs: card.what_it_is,
+    positioning: card.positioning,
+    differentiators: card.differentiators ?? [],
+    faqs: leerFaqs(card.faqs),
+    audience: card.audience,
+    tone: card.tone ?? [],
+    bannedWords: card.banned_words ?? [],
+    approvedExamples: card.approved_examples ?? [],
+    cadence: card.cadence,
+    createdAt: card.created_at,
+  }
+
+  /* --- Rendimiento de los últimos ~90 días -------------------------------- */
+  const mesAnterior = addMonths(month, -1)
+  const ventana = [month, mesAnterior, addMonths(month, -2)]
+
+  const { data: piezasVentana } = await admin
+    .from('pieces')
+    .select('id, month, format, pillar_id')
+    .eq('client_id', clientId)
+    .in('month', ventana)
+
+  const ids = (piezasVentana ?? []).map((p) => p.id)
+  const { data: mediciones } = ids.length
+    ? await admin
+        .from('results_piece')
+        .select('piece_id, reach, saves, interactions')
+        .eq('client_id', clientId)
+        .in('piece_id', ids)
+        .order('measured_at', { ascending: false })
+    : { data: [] as { piece_id: string; reach: number; saves: number; interactions: number }[] }
+
+  // Una pieza se mide varias veces; vale la última. La consulta viene ordenada
+  // por `measured_at` desc, así que la primera que se ve gana.
+  const ultima = new Map<string, { reach: number; saves: number; interactions: number }>()
+  for (const m of mediciones ?? []) {
+    if (!ultima.has(m.piece_id)) ultima.set(m.piece_id, m)
+  }
+
+  const medidas: MedicionDePieza[] = []
+  for (const pieza of piezasVentana ?? []) {
+    const m = ultima.get(pieza.id)
+    if (!m) continue
+    medidas.push({
+      format: pieza.format,
+      pillarId: pieza.pillar_id,
+      reach: m.reach,
+      saves: m.saves,
+      interactions: m.interactions,
+    })
+  }
+
+  const objetivos = (plan.pillar_mix ?? {}) as Record<string, number>
+  const pilaresConObjetivo = pilares.map((p) => {
+    const objetivo = objetivos[p.id]
+    return {
+      id: p.id,
+      name: p.name,
+      targetPct: typeof objetivo === 'number' ? objetivo : p.target_pct,
+    }
+  })
+
+  /* --- Conteos del mes anterior, tal como fueron -------------------------- */
+  const feedPrev: Record<PieceFormat, number> = { post: 0, carrusel: 0, reel: 0 }
+  for (const pieza of piezasVentana ?? []) {
+    if (pieza.month === mesAnterior) feedPrev[pieza.format] += 1
+  }
+
+  const { data: storiesPrev } = await admin
+    .from('stories')
+    .select('kind')
+    .eq('client_id', clientId)
+    .eq('month', mesAnterior)
+
+  const storyPrev: Record<StoryKind, number> = { diaria: 0, campana: 0, interactiva: 0 }
+  for (const s of storiesPrev ?? []) storyPrev[s.kind] += 1
+
+  /* --- Fechas clave de aquí en adelante ----------------------------------- */
+  const primeroDelMes = `${month}-01`
+  const { data: fechas } = await admin
+    .from('key_dates')
+    .select('date, title, kind, notes')
+    .eq('client_id', clientId)
+    .gte('date', primeroDelMes)
+    .order('date')
+
+  const key_dates = (fechas ?? []).map((f) => ({
+    month: f.date.slice(0, 7) as MonthKey,
+    title: f.title,
+    kind: KIND_FECHA_A_CONTRATO[f.kind] ?? 'evento',
+    starts_on: f.date,
+    ends_on: null,
+    notes: f.notes,
+  }))
+
+  const input: AgentInput<'estratega'> = {
+    client_id: clientId,
+    month,
+    context_version: contextCard.version,
+    tier: cliente.tier ?? 'sin tier',
+    capacity_declared: plan.capacity_declared,
+    format_performance: rendimientoPorFormato(medidas),
+    pillar_performance: rendimientoPorPilar(medidas, pilaresConObjetivo),
+    previous_counts: { feed: feedPrev, stories: storyPrev },
+    key_dates,
+    planned_ad_budget_cents: 0,
+  }
+
+  const proveedor = proveedorDeEnv()
+  if ('error' in proveedor) return { ok: false, code: 'config', message: proveedor.error }
+
+  const result = await runAgent('estratega', input, {
+    orgId: cliente.org_id,
+    clientId,
+    contextCard: renderContextCard(contextCard),
+    contextVersion: contextCard.version,
+    trigger: 'manual',
+    triggeredBy: userId,
+    provider: proveedor,
+    store: createAgentStore(admin),
+    clock: systemClock,
+    configuredProvider: serverEnv().AGENTS_PROVIDER,
+    ...(opciones.omitirInterruptor ? { omitirInterruptor: true } : {}),
+  })
+
+  if (!result.ok) {
+    return {
+      ok: false,
+      code: result.error.code,
+      message: result.error.message,
+      ...(result.runId ? { runId: result.runId } : {}),
+    }
+  }
+
+  if (result.output.kind === 'escalamiento') {
+    return { ok: true, tipo: 'escalado', pregunta: result.output.pregunta, runId: result.runId }
+  }
+
+  /* --- Escribir el plan a volume_plans ------------------------------------ */
+  const data = result.output.data
+
+  const feedCounts: Record<string, number> = {}
+  for (const [formato, row] of Object.entries(data.feed)) feedCounts[formato] = row.count
+  const storyCounts: Record<string, number> = {}
+  for (const [tipo, row] of Object.entries(data.stories)) storyCounts[tipo] = row.count
+
+  // El plan escribe la mezcla por PILAR usando su id, no su nombre: la barra de
+  // distribución cruza contra los pilares del cliente por id.
+  const idPorNombre = new Map(pilares.map((p) => [p.name, p.id] as const))
+  const pillarMix: Record<string, number> = {}
+  for (const fila of data.pillar_mix) {
+    const id = idPorNombre.get(fila.pillar)
+    if (id) pillarMix[id] = fila.pct
+  }
+
+  // `rationale` se guarda como objeto {cambio: porque}: la columna exige un
+  // objeto jsonb (no un arreglo) y el lector acepta esa forma. La evidencia
+  // completa con su número vive en la corrida (`agent_runs`), que es de donde el
+  // bloque "Por qué esta mezcla" saca los bullets ricos.
+  const rationale: Record<string, string> = {}
+  for (const r of data.rationale) rationale[r.change] = r.because
+
+  const { error: errorEscritura } = await admin
+    .from('volume_plans')
+    .update({
+      feed_counts: feedCounts,
+      story_counts: storyCounts,
+      pillar_mix: pillarMix,
+      rationale,
+      updated_at: systemClock.now().toISOString(),
+    })
+    .eq('client_id', clientId)
+    .eq('month', month)
+
+  if (errorEscritura) {
+    return {
+      ok: false,
+      code: 'escritura',
+      message: `El Estratega corrió, pero no se pudo escribir el plan: ${errorEscritura.message}`,
+      runId: result.runId,
+    }
+  }
+
+  return { ok: true, tipo: 'plan', total: data.total_pieces, runId: result.runId }
 }
