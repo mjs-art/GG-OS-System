@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { correrCuentaWhatsApp } from '@/agents/cuenta-whatsapp'
 import { normalizarTelefono, payloadN8nSchema } from '@/domain/whatsapp'
 import { serverEnv } from '@/lib/env'
 import { createAdminClient } from '@/lib/supabase/admin'
@@ -108,11 +109,24 @@ export async function POST(request: Request): Promise<Response> {
 
   // Webhook reintentado: el UNIQUE (org_id, wa_message_id) lo frena. Es
   // idempotente, así que un duplicado no es falla — el mensaje ya estaba.
-  if (error && error.code !== '23505') {
+  const duplicado = Boolean(error) && error?.code === '23505'
+  if (error && !duplicado) {
     return NextResponse.json({ ok: false, message: error.message }, { status: 422 })
   }
 
   await admin.from('wa_conversations').update({ last_message_at: ahora }).eq('id', conversacion.id)
+
+  // Un entrante nuevo (no un reintento) dispara al agente de Cuenta para dejar
+  // un BORRADOR de respuesta. Best-effort: el mensaje ya quedó guardado, así
+  // que si no hay política, Context Card o saldo, no hay borrador y ya. Nunca
+  // se le hace esperar a n8n por esto, ni un fallo aquí tumba el webhook.
+  if (!duplicado) {
+    try {
+      await correrCuentaWhatsApp(admin, conversacion.id)
+    } catch (e) {
+      console.warn(`No se pudo redactar el borrador de Cuenta: ${String(e)}`)
+    }
+  }
 
   return NextResponse.json({ ok: true })
 }
