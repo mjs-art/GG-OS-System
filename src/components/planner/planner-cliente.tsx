@@ -19,6 +19,7 @@ import {
 } from '@/components/planner/acciones'
 import { SegmentedControl } from '@/components/planner/controles'
 import { PrepararMesBoton } from '@/components/planner/preparar-mes-boton'
+import { PresentarEnLote } from '@/components/planner/presentar-en-lote'
 import {
   DrawerPieza,
   type CambioDePieza,
@@ -108,6 +109,28 @@ export function PlannerCliente({
   const [abierta, setAbierta] = useState<string | null>(null)
   const [corriendo, setCorriendo] = useState(false)
   const router = useRouter()
+
+  // Las piezas listas para mandar al cliente. Se derivan del estado, así que en
+  // cuanto una se presenta desaparece de la lista sin recargar.
+  const revisadas = useMemo(
+    () =>
+      piezas
+        .filter((p) => p.status === 'revisado')
+        .map((p) => ({
+          id: p.id,
+          etiqueta: p.hook ?? p.idea ?? 'Sin título',
+          format: p.format,
+          publishAt: p.publishAt,
+        })),
+    [piezas],
+  )
+
+  const alPresentar = useCallback((ids: string[]) => {
+    const presentadas = new Set(ids)
+    setPiezas((previas) =>
+      previas.map((p) => (presentadas.has(p.id) ? { ...p, status: 'con_cliente' as const } : p)),
+    )
+  }, [])
 
   /**
    * Correr un agente sobre la pieza abierta. Hoy solo el Redactor está enchufado
@@ -563,6 +586,7 @@ export function PlannerCliente({
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
+          <PresentarEnLote slug={cliente.slug} piezas={revisadas} onPresentadas={alPresentar} />
           <PrepararMesBoton clientId={cliente.id} month={mes} />
           <SegmentedControl
             etiqueta="Sub-vista del planner"

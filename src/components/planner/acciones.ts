@@ -168,6 +168,44 @@ export async function reacomodarSlots(entrada: unknown): Promise<ResultadoAccion
   return { ok: true }
 }
 
+/* --- Presentar al cliente en lote ------------------------------------------ */
+
+const entradaPresentar = z.object({
+  slug,
+  ids: z.array(uuid).min(1).max(400),
+})
+
+export type ResultadoPresentar = { ok: true; presentadas: number } | { ok: false; mensaje: string }
+
+/**
+ * Manda varias piezas al portal del cliente de un golpe: `revisado` →
+ * `con_cliente`.
+ *
+ * El `.eq('status', 'revisado')` no es un filtro de comodidad, es la salvaguarda:
+ * solo avanza lo que de verdad está revisado. Un id viejo, una pieza que
+ * retrocedió, o una que ya se presentó, no se tocan — y sobre todo, nunca se le
+ * enseña al cliente algo sin revisar por un id que se coló en la lista. Cada
+ * pieza cambia su propio renglón; el conteo devuelto dice cuántas se movieron de
+ * verdad, no cuántas se pidieron.
+ */
+export async function presentarPiezasEnLote(entrada: unknown): Promise<ResultadoPresentar> {
+  const parsed = entradaPresentar.safeParse(entrada)
+  if (!parsed.success) return { ok: false, mensaje: DATOS_INVALIDOS }
+
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('pieces')
+    .update({ status: 'con_cliente' })
+    .in('id', parsed.data.ids)
+    .eq('status', 'revisado')
+    .select('id')
+
+  if (error) return fallo(error, 'No se pudieron presentar las piezas al cliente.')
+
+  refrescar(parsed.data.slug)
+  return { ok: true, presentadas: (data ?? []).length }
+}
+
 /* --- Editar una pieza ------------------------------------------------------ */
 
 const CAMPOS_DE_TEXTO = ['idea', 'hook', 'script', 'copy_in', 'copy_out', 'cta'] as const
