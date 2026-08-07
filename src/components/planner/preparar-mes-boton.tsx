@@ -18,6 +18,7 @@ import { Button } from '@/components/ui/primitives'
  */
 
 interface Resumen {
+  estratega: { estado: 'plan' | 'escalado' | 'error'; detalle: string }
   candidatas: number
   escritas: number
   escaladas: number
@@ -27,12 +28,21 @@ interface Resumen {
   errores: { message: string }[]
 }
 
+/** El paso del Estratega, en una línea para el toast. */
+function lineaEstratega(e: Resumen['estratega']): string {
+  if (e.estado === 'plan') return `Plan del mes: ${e.detalle}`
+  if (e.estado === 'escalado') return 'El Estratega preguntó algo; está en la Bandeja'
+  return `Plan sin armar: ${e.detalle}`
+}
+
 function contar(n: number, singular: string, plural: string): string {
   return `${n} ${n === 1 ? singular : plural}`
 }
 
 /** Traduce el resumen del servidor a un título y una descripción para el toast. */
 function mensajeDeResumen(r: Resumen): { titulo: string; descripcion: string } {
+  const estratega = lineaEstratega(r.estratega)
+
   if (r.candidatas === 0) {
     const partes = []
     if (r.yaTrabajadas > 0)
@@ -40,13 +50,11 @@ function mensajeDeResumen(r: Resumen): { titulo: string; descripcion: string } {
     if (r.sinInsumos > 0) {
       partes.push(`${contar(r.sinInsumos, 'pieza', 'piezas')} sin idea, pilar o plataforma`)
     }
-    return {
-      titulo: 'Nada que escribir este mes',
-      descripcion:
-        partes.length > 0
-          ? `${partes.join(' y ')}. El Redactor solo escribe lo que está en idea y sin empezar.`
-          : 'No hay piezas en este mes todavía.',
-    }
+    const copy =
+      partes.length > 0
+        ? `Copy: ${partes.join(' y ')}. El Redactor solo escribe lo que está en idea y sin empezar.`
+        : 'Copy: no hay piezas en este mes todavía.'
+    return { titulo: estratega, descripcion: copy }
   }
 
   const hechas = []
@@ -64,12 +72,14 @@ function mensajeDeResumen(r: Resumen): { titulo: string; descripcion: string } {
     )
   if (r.errores.length > 0) cola.push(r.errores[0]?.message ?? '')
 
+  const copy =
+    hechas.length > 0
+      ? `Copy: ${hechas.join(' · ')}`
+      : 'Copy: el Redactor no tenía nada nuevo que escribir'
+
   return {
-    titulo:
-      hechas.length > 0 ? `Mes preparado: ${hechas.join(' · ')}` : 'El Redactor no pudo avanzar',
-    descripcion:
-      cola.filter(Boolean).join('. ') ||
-      'Revisa el copy en el planner y aprueba lo que quede bien.',
+    titulo: estratega,
+    descripcion: [copy, ...cola].filter(Boolean).join('. '),
   }
 }
 
@@ -99,7 +109,9 @@ export function PrepararMesBoton({ clientId, month }: { clientId: string; month:
       }
 
       const { titulo, descripcion } = mensajeDeResumen(r.resumen)
-      if (r.resumen.escritas > 0 || r.resumen.escaladas > 0) {
+      const avanzó =
+        r.resumen.estratega.estado === 'plan' || r.resumen.escritas > 0 || r.resumen.escaladas > 0
+      if (avanzó) {
         toast.success(titulo, { id, description: descripcion })
       } else {
         toast(titulo, { id, description: descripcion })

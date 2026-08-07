@@ -1,9 +1,10 @@
 import 'server-only'
 
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { correrRedactor } from '@/agents/correr'
+import { correrEstratega, correrRedactor } from '@/agents/correr'
 import { clasificarPiezas } from '@/domain/preparar-mes'
 import type { Database } from '@/lib/supabase/database.types'
+import type { MonthKey } from '@/lib/time'
 
 /**
  * "Preparar el mes": correr la cadena de agentes sobre un cliente y un mes de un
@@ -21,11 +22,11 @@ import type { Database } from '@/lib/supabase/database.types'
  *      un agente toca su tope, el lote se detiene y lo reporta. Un botón no
  *      puede gastar sin límite.
  *
- * ALCANCE HOY: de los tres agentes de la cadena (Estratega → Redactor → Editor
- * de marca), solo el Redactor tiene compositor y tabla destino. El Estratega
- * escribe a `volume_plans` y el Editor de marca dictamina — sus secciones son
- * etapas aparte del roadmap. Cuando lleguen, se suman aquí como pasos más del
- * mismo lote. Mientras tanto, preparar el mes = escribir el copy que falta.
+ * ALCANCE HOY: la cadena es Estratega → Redactor → Editor de marca. El
+ * Estratega ya corre (arma el plan en `volume_plans`) y el Redactor también
+ * (escribe el copy que falta). El Editor de marca dictamina y todavía no tiene
+ * compositor; cuando llegue su etapa se suma aquí como un paso más del mismo
+ * lote, después del Redactor.
  */
 
 export interface ErrorDePieza {
@@ -34,7 +35,16 @@ export interface ErrorDePieza {
   message: string
 }
 
+/** Cómo le fue al Estratega, el primer paso de la cadena. */
+export interface ResumenEstratega {
+  estado: 'plan' | 'escalado' | 'error'
+  /** Total de piezas del plan cuando salió bien; el mensaje cuando no. */
+  detalle: string
+}
+
 export interface ResumenPrepararMes {
+  /** El paso del Estratega: arma el plan del mes antes de que el Redactor escriba. */
+  estratega: ResumenEstratega
   /** Cuántas piezas se consideraron candidatas al empezar. */
   candidatas: number
   escritas: number
@@ -57,6 +67,24 @@ export async function prepararMes(
   admin: SupabaseClient<Database>,
   entrada: { clientId: string; month: string; userId: string },
 ): Promise<ResumenPrepararMes> {
+  // Paso 1 de la cadena: el Estratega arma el plan del mes. Que escale o falle
+  // (p. ej. sin capacidad declarada) NO detiene al Redactor — se reporta y se
+  // sigue. El copy que falta se puede escribir aunque el plan no se haya armado.
+  const est = await correrEstratega(
+    admin,
+    entrada.clientId,
+    entrada.month as MonthKey,
+    entrada.userId,
+    {
+      omitirInterruptor: true,
+    },
+  )
+  const estratega: ResumenEstratega = est.ok
+    ? est.tipo === 'plan'
+      ? { estado: 'plan', detalle: `${est.total} piezas` }
+      : { estado: 'escalado', detalle: est.pregunta }
+    : { estado: 'error', detalle: est.message }
+
   const { data, error } = await admin
     .from('pieces')
     .select('id, status, hook, idea, pillar_id, platforms')
@@ -80,6 +108,7 @@ export async function prepararMes(
   )
 
   const resumen: ResumenPrepararMes = {
+    estratega,
     candidatas: candidatas.length,
     escritas: 0,
     escaladas: 0,
