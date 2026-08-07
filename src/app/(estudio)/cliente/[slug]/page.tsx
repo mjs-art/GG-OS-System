@@ -35,6 +35,7 @@ import {
   listarReglasDuras,
   listarTareas,
   obtenerContextCard,
+  sugerenciasDeAprendizaje,
 } from '@/lib/datos/secciones'
 import { isMonthKey, systemClock, type MonthKey } from '@/lib/time'
 
@@ -91,6 +92,7 @@ export default async function ClientePage({ params, searchParams }: Props) {
     eventos,
     notas,
     notaDeMarca,
+    sugerencias,
   ] = await Promise.all([
     listarPiezas(cliente.id, mes),
     listarStories(cliente.id, mes),
@@ -109,6 +111,7 @@ export default async function ClientePage({ params, searchParams }: Props) {
     listarEventosPendientes(cliente.id, hoy),
     listarNotasPrivadas(cliente.id),
     listarNotasDeMarca(cliente.id),
+    sugerenciasDeAprendizaje(cliente.id),
   ])
 
   const semaforos = redes.map((r) => ({
@@ -186,6 +189,7 @@ export default async function ClientePage({ params, searchParams }: Props) {
                   versiones={versiones}
                   reglas={reglas}
                   aprendizaje={aprendizaje}
+                  sugerencias={sugerencias}
                   notaDeMarca={notaDeMarca}
                 />
               )}

@@ -1,6 +1,7 @@
 import 'server-only'
 
 import { z } from 'zod'
+import { detectarPalabrasRecurrentes, type SugerenciaPalabra } from '@/domain/aprendizaje'
 import { normalizarParamsDeRegla } from '@/domain/brand-rules'
 import type { AgentKey, PieceFormat, RuleCheck, RuleSeverity } from '@/domain/labels'
 import { createClient } from '@/lib/supabase/server'
@@ -340,6 +341,68 @@ export async function aprendizajeDeMarca(clientId: string): Promise<AprendizajeD
       createdAt: e.created_at,
     })),
   }
+}
+
+/**
+ * Las palabras que Ana borra una y otra vez, listas para volverse regla dura.
+ *
+ * Se lee aparte de `aprendizajeDeMarca` a propósito: ese lector trae las
+ * últimas ocho correcciones para MOSTRARLAS, y aquí hace falta una ventana
+ * mucho más ancha para DETECTAR un patrón. Mezclar los dos límites daría o una
+ * lista de correcciones larguísima o una detección ciega.
+ *
+ * La exclusión de lo ya cubierto usa la MISMA traducción de parámetros que el
+ * verificador (`normalizarParamsDeRegla`): una palabra que ya es regla léxica
+ * no se vuelve a proponer, sin importar en qué forma esté guardada.
+ */
+export async function sugerenciasDeAprendizaje(clientId: string): Promise<SugerenciaPalabra[]> {
+  const supabase = await createClient()
+
+  const [edicionesRes, cardRes, reglasRes] = await Promise.all([
+    supabase
+      .from('human_edits')
+      .select('field, old_value, new_value, agent')
+      .eq('client_id', clientId)
+      .order('created_at', { ascending: false })
+      // Ancho pero acotado: suficiente para ver el patrón de varios meses sin
+      // arrastrar el historial completo a memoria en cada render de la sección.
+      .limit(300),
+    supabase
+      .from('context_card_versions')
+      .select('banned_words')
+      .eq('client_id', clientId)
+      .order('version', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    supabase
+      .from('brand_rules')
+      .select('kind, params')
+      .eq('client_id', clientId)
+      .eq('active', true),
+  ])
+
+  const primerError = edicionesRes.error ?? cardRes.error ?? reglasRes.error
+  if (primerError) {
+    throw new Error(`No se pudieron leer las sugerencias de marca: ${primerError.message}`)
+  }
+
+  const yaCubiertas = [
+    ...(cardRes.data?.banned_words ?? []),
+    ...(reglasRes.data ?? []).flatMap((r) => {
+      const params = normalizarParamsDeRegla(r.kind, r.params)
+      return params?.kind === 'banned_words' ? params.words : []
+    }),
+  ]
+
+  return detectarPalabrasRecurrentes(
+    (edicionesRes.data ?? []).map((e) => ({
+      field: e.field,
+      oldValue: e.old_value,
+      newValue: e.new_value,
+      agent: e.agent,
+    })),
+    { yaCubiertas },
+  )
 }
 
 /* ==========================================================================
