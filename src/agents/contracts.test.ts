@@ -288,6 +288,55 @@ describe('proveedor mock', () => {
 })
 
 /* -------------------------------------------------------------------------- */
+/*  Cuenta · la segunda tarea: responder un WhatsApp                           */
+/* -------------------------------------------------------------------------- */
+
+describe('cuenta · respuesta de WhatsApp', () => {
+  const whatsappInput = {
+    task: 'whatsapp_respuesta',
+    client_id: '00000000-0000-4000-8000-0000000000cc',
+    month: '2026-09',
+    context_version: 7,
+    client_name: 'Tower Bar',
+    incoming: { body: '¿ya quedó el reel de la noche de jazz?', has_media: false },
+    history: [
+      { direction: 'outbound', body: 'te mando la propuesta mañana' },
+      { direction: 'inbound', body: '¿ya quedó el reel de la noche de jazz?' },
+    ],
+    pending_approvals: 2,
+  }
+
+  it('el contrato distingue las dos tareas por su discriminante', () => {
+    expect(contractFor('cuenta').input.safeParse(whatsappInput).success).toBe(true)
+    // Sin `task`, la unión discriminada ya no sabe qué variante validar.
+    const { task: _task, ...sinTask } = TOWER_BAR_INPUTS.cuenta
+    expect(contractFor('cuenta').input.safeParse(sinTask).success).toBe(false)
+  })
+
+  it('el mock redacta un borrador que exige aprobación', async () => {
+    const parsed = contractFor('cuenta').input.safeParse(whatsappInput)
+    expect(parsed.success).toBe(true)
+    if (!parsed.success) return
+
+    const result = await provider.complete({
+      agent: 'cuenta',
+      input: parsed.data,
+      contextCard: 'cc',
+      contextVersion: 7,
+      model: null,
+    })
+    const salida = contractFor('cuenta').output.parse(result.output)
+
+    expect(salida.kind).toBe('resultado')
+    if (salida.kind === 'resultado' && salida.data.task === 'whatsapp_respuesta') {
+      expect(salida.data.reply.length).toBeGreaterThan(0)
+      // Nunca sale sin que una persona lo apruebe: es `true` literal en el schema.
+      expect(salida.data.send_requires_approval).toBe(true)
+    }
+  })
+})
+
+/* -------------------------------------------------------------------------- */
 /*  El runner                                                                  */
 /* -------------------------------------------------------------------------- */
 

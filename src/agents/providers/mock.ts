@@ -349,6 +349,7 @@ export const TOWER_BAR_INPUTS: { [K in AgentKey]: AgentInput<K> } = {
 
   cuenta: {
     ...base,
+    task: 'presentacion_mensual',
     client_name: 'Tower Bar',
     pieces_total: 22,
     pieces_approved: 14,
@@ -943,12 +944,37 @@ const BUILDERS: { [K in AgentKey]: MockBuilder<K> } = {
   }),
 
   cuenta: (input, clock) => {
+    // Respuesta de WhatsApp: un borrador corto y determinista. No inventa datos;
+    // acusa recibo, contesta con contexto y, si hay adjunto, lo menciona.
+    if (input.task === 'whatsapp_respuesta') {
+      const saludo = input.history.some((m) => m.direction === 'outbound')
+        ? 'Hola de nuevo'
+        : 'Hola, qué gusto'
+      const acusa = input.incoming.has_media ? ' Ya vi lo que mandaste.' : ''
+      const pendientes =
+        input.pending_approvals > 0
+          ? ` Por cierto, quedan ${input.pending_approvals} piezas por que las revises cuando puedas.`
+          : ''
+      return {
+        kind: 'resultado',
+        data: {
+          task: 'whatsapp_respuesta',
+          reply: `${saludo}.${acusa} Con gusto lo reviso y te confirmo en un momento.${pendientes}`,
+          attach_note: input.incoming.has_media
+            ? 'El cliente mandó un archivo; revísalo antes de responder.'
+            : null,
+          send_requires_approval: true,
+        },
+      }
+    }
+
     const pending = input.pieces_total - input.pieces_approved
     const waitingTooLong = (input.last_client_response_days_ago ?? 0) >= 5
 
     return {
       kind: 'resultado',
       data: {
+        task: 'presentacion_mensual',
         presentation: {
           title: `${input.client_name} · plan del mes`,
           month: input.month,

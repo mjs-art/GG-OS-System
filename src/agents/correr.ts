@@ -68,7 +68,7 @@ function leerFaqs(valor: Json): PreguntaFrecuente[] {
   })
 }
 
-function proveedorDeEnv(): AgentProvider | { error: string } {
+export function proveedorDeEnv(): AgentProvider | { error: string } {
   const env = serverEnv()
   if (env.AGENTS_PROVIDER === 'anthropic') {
     if (!env.ANTHROPIC_API_KEY)

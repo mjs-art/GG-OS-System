@@ -740,7 +740,15 @@ export const auditorOutputSchema = outputOf(auditSchema)
 /*  ⑧ CUENTA — presentación mensual y seguimiento.                             */
 /* -------------------------------------------------------------------------- */
 
-export const cuentaInputSchema = baseInput.extend({
+/**
+ * Cuenta tiene DOS tareas y se discriminan por `task`. La presentación mensual
+ * es el trabajo de fondo; la respuesta de WhatsApp es la que redacta un borrador
+ * cuando un cliente escribe. Son entradas y salidas distintas, pero el mismo
+ * agente: la procedencia en la base es `authored_by_agent = 'cuenta'` para las
+ * dos, y las dos gastan del mismo tope mensual.
+ */
+const cuentaPresentacionInput = baseInput.extend({
+  task: z.literal('presentacion_mensual'),
   client_name: nonEmpty,
   pieces_total: z.number().int().min(0),
   pieces_approved: z.number().int().min(0),
@@ -760,7 +768,41 @@ export const cuentaInputSchema = baseInput.extend({
   last_client_response_days_ago: z.number().int().min(0).nullable(),
 })
 
-const accountUpdateSchema = z.object({
+/**
+ * Responder un WhatsApp del cliente. El agente NO manda nada: redacta un
+ * borrador que una persona revisa y aprueba (regla #1). Recibe el mensaje al
+ * que hay que responder y la conversación reciente para no contestar sin
+ * contexto.
+ */
+const cuentaWhatsappInput = baseInput.extend({
+  task: z.literal('whatsapp_respuesta'),
+  client_name: nonEmpty,
+  /** El último mensaje del cliente, el que hay que responder. */
+  incoming: z.object({
+    body: z.string().nullable(),
+    /** Si el cliente mandó una foto o un archivo, para acusar recibo. */
+    has_media: z.boolean(),
+  }),
+  /** La conversación reciente, del más viejo al más nuevo. Da el contexto. */
+  history: z
+    .array(
+      z.object({
+        direction: z.enum(['inbound', 'outbound']),
+        body: z.string().nullable(),
+      }),
+    )
+    .max(30),
+  /** Aprobaciones pendientes del cliente, por si está preguntando por ellas. */
+  pending_approvals: z.number().int().min(0),
+})
+
+export const cuentaInputSchema = z.discriminatedUnion('task', [
+  cuentaPresentacionInput,
+  cuentaWhatsappInput,
+])
+
+const cuentaPresentacionResult = z.object({
+  task: z.literal('presentacion_mensual'),
   presentation: z.object({
     title: nonEmpty,
     month: monthKeySchema,
@@ -791,4 +833,26 @@ const accountUpdateSchema = z.object({
   ),
 })
 
-export const cuentaOutputSchema = outputOf(accountUpdateSchema)
+/**
+ * El borrador de respuesta a un WhatsApp. Es texto plano —WhatsApp no es HTML—
+ * y no sale solo: `send_requires_approval` es `true` literal, igual que los
+ * nudges y las propuestas del Pautero. Un agente que contesta al cliente sin
+ * que una persona lo lea es justo lo que la regla #1 prohíbe.
+ */
+const cuentaWhatsappResult = z.object({
+  task: z.literal('whatsapp_respuesta'),
+  reply: nonEmpty,
+  /**
+   * Qué convendría adjuntar (una pieza, una foto), en palabras. El archivo lo
+   * pega una persona al aprobar: el agente propone, no sube nada.
+   */
+  attach_note: z.string().nullable(),
+  send_requires_approval: z.literal(true),
+})
+
+const cuentaResultSchema = z.discriminatedUnion('task', [
+  cuentaPresentacionResult,
+  cuentaWhatsappResult,
+])
+
+export const cuentaOutputSchema = outputOf(cuentaResultSchema)
