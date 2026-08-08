@@ -97,6 +97,14 @@ const serverSchema = z.object({
    */
   N8N_INBOUND_SECRET: z.string().optional(),
   N8N_SEND_WEBHOOK_URL: z.url().optional(),
+
+  /**
+   * Secreto del cron. El scheduler (Vercel Cron, GitHub Action, n8n, lo que sea)
+   * lo manda en el header `x-cron-secret` al pegarle a `/api/jobs/cron`. Sin él
+   * configurado, esa ruta responde 503 y no corre nada a ciegas — igual que el
+   * webhook de WhatsApp. Genera uno con `openssl rand -base64 32`.
+   */
+  CRON_SECRET: z.string().min(16).optional(),
 })
 
 let cachedServerEnv: z.infer<typeof serverSchema> | null = null

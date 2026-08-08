@@ -6,8 +6,16 @@ import { renderContextCard } from '@/agents/context-card'
 import { createAnthropicProvider } from '@/agents/providers/anthropic'
 import { createMockProvider } from '@/agents/providers/mock'
 import type { AgentInput } from '@/agents/registry'
-import { runAgent, type AgentProvider } from '@/agents/runner'
+import { runAgent, type AgentProvider, type RunTrigger } from '@/agents/runner'
 import { createAgentStore } from '@/agents/store'
+import {
+  construirNoPublicadas,
+  construirPiecePerformance,
+  totalesDeMes,
+  type PiezaMedida,
+  type PiezaPendiente,
+} from '@/domain/analista-entrada'
+import { construirCuentasAuditor } from '@/domain/auditor-entrada'
 import {
   rendimientoPorFormato,
   rendimientoPorPilar,
@@ -552,4 +560,431 @@ export async function correrEstratega(
   }
 
   return { ok: true, tipo: 'plan', total: data.total_pieces, runId: result.runId }
+}
+
+/* ==========================================================================
+   AUDITOR — el semáforo por red
+   ========================================================================== */
+
+export type ResultadoAuditor =
+  | {
+      readonly ok: true
+      readonly tipo: 'auditoria'
+      readonly cuentas: number
+      readonly runId: string
+      readonly costCents: number
+    }
+  | {
+      readonly ok: true
+      readonly tipo: 'escalado'
+      readonly pregunta: string
+      readonly runId: string
+    }
+  | { readonly ok: false; readonly code: string; readonly message: string; readonly runId?: string }
+
+/**
+ * El compositor del Auditor: arma su entrada desde `social_accounts`, corre el
+ * agente y escribe una fila de `account_audits` por red — con su corrida detrás.
+ *
+ * Escribir aquí, con el cliente admin, es a propósito: `account_audits` es
+ * append-only y `authenticated` solo la lee. Una auditoría sin corrida que la
+ * respalde no se puede rastrear, así que la produce el runner, no un botón. La
+ * ruta ya verificó ANTES, con el cliente de sesión, que quien dispara es del
+ * estudio del cliente.
+ *
+ * No inventa datos: si el cliente no tiene redes conectadas, no corre y lo dice.
+ */
+export async function correrAuditor(
+  admin: SupabaseClient<Database>,
+  clientId: string,
+  userId: string | null,
+  opciones: { omitirInterruptor?: boolean; trigger?: RunTrigger } = {},
+): Promise<ResultadoAuditor> {
+  const { data: cliente, error: errorCliente } = await admin
+    .from('clients')
+    .select('id, org_id')
+    .eq('id', clientId)
+    .maybeSingle()
+
+  if (errorCliente)
+    return {
+      ok: false,
+      code: 'lectura',
+      message: `No se pudo leer el cliente: ${errorCliente.message}`,
+    }
+  if (!cliente) return { ok: false, code: 'no_encontrado', message: 'No se encontró el cliente.' }
+
+  const { data: cuentas, error: errorCuentas } = await admin
+    .from('social_accounts')
+    .select(
+      'platform, handle, url, followers, followers_delta, last_post_at, posts_per_week, target_per_week, profile_checklist, unanswered_dms, unanswered_comments',
+    )
+    .eq('client_id', clientId)
+
+  if (errorCuentas)
+    return {
+      ok: false,
+      code: 'lectura',
+      message: `No se pudieron leer las redes: ${errorCuentas.message}`,
+    }
+  if (!cuentas || cuentas.length === 0) {
+    return {
+      ok: false,
+      code: 'sin_cuentas',
+      message:
+        'Este cliente no tiene redes conectadas. Conecta al menos una cuenta antes de correr el Auditor.',
+    }
+  }
+
+  const { data: card } = await admin
+    .from('context_card_versions')
+    .select(
+      'id, version, what_it_is, positioning, differentiators, faqs, audience, tone, banned_words, approved_examples, cadence, created_at',
+    )
+    .eq('client_id', clientId)
+    .order('version', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (!card) {
+    return {
+      ok: false,
+      code: 'sin_context_card',
+      message:
+        'Este cliente no tiene Context Card. Toda corrida se registra con la versión con la que corrió; créala en Marca antes de auditar.',
+    }
+  }
+
+  const contextCard: ContextCard = {
+    id: card.id,
+    version: card.version,
+    whatItIs: card.what_it_is,
+    positioning: card.positioning,
+    differentiators: card.differentiators ?? [],
+    faqs: leerFaqs(card.faqs),
+    audience: card.audience,
+    tone: card.tone ?? [],
+    bannedWords: card.banned_words ?? [],
+    approvedExamples: card.approved_examples ?? [],
+    cadence: card.cadence,
+    createdAt: card.created_at,
+  }
+
+  // El mes solo etiqueta la corrida (una auditoría no es mensual). Se arma en UTC
+  // sin crear un Date fuera de @/lib/time, igual que el chequeo de gasto.
+  const ahora = systemClock.now()
+  const month =
+    `${ahora.getUTCFullYear()}-${String(ahora.getUTCMonth() + 1).padStart(2, '0')}` as MonthKey
+
+  const input: AgentInput<'auditor'> = {
+    client_id: clientId,
+    month,
+    context_version: contextCard.version,
+    accounts: construirCuentasAuditor(cuentas),
+    checked_at: ahora.toISOString(),
+  }
+
+  const proveedor = proveedorDeEnv()
+  if ('error' in proveedor) return { ok: false, code: 'config', message: proveedor.error }
+
+  const result = await runAgent('auditor', input, {
+    orgId: cliente.org_id,
+    clientId,
+    contextCard: renderContextCard(contextCard),
+    contextVersion: contextCard.version,
+    trigger: opciones.trigger ?? 'manual',
+    triggeredBy: userId,
+    provider: proveedor,
+    store: createAgentStore(admin),
+    clock: systemClock,
+    configuredProvider: serverEnv().AGENTS_PROVIDER,
+    ...(opciones.omitirInterruptor ? { omitirInterruptor: true } : {}),
+  })
+
+  if (!result.ok) {
+    return {
+      ok: false,
+      code: result.error.code,
+      message: result.error.message,
+      ...(result.runId ? { runId: result.runId } : {}),
+    }
+  }
+
+  if (result.output.kind === 'escalamiento') {
+    return { ok: true, tipo: 'escalado', pregunta: result.output.pregunta, runId: result.runId }
+  }
+
+  // Una fila por red. `findings` guarda el semáforo, el titular y los hallazgos;
+  // la columna `score` es el número que ordena las tarjetas de Redes.
+  const data = result.output.data
+  const filas = data.accounts.map((cuenta) => ({
+    org_id: cliente.org_id,
+    client_id: clientId,
+    platform: cuenta.platform,
+    score: cuenta.score,
+    findings: {
+      light: cuenta.light,
+      headline: data.headline,
+      findings: cuenta.findings,
+    } as Json,
+  }))
+
+  const { error: errorEscritura } = await admin.from('account_audits').insert(filas)
+  if (errorEscritura) {
+    return {
+      ok: false,
+      code: 'escritura',
+      message: `El Auditor corrió, pero no se pudo guardar la auditoría: ${errorEscritura.message}`,
+      runId: result.runId,
+    }
+  }
+
+  return {
+    ok: true,
+    tipo: 'auditoria',
+    cuentas: filas.length,
+    runId: result.runId,
+    costCents: result.costCents,
+  }
+}
+
+/* ==========================================================================
+   ANALISTA — la lectura del mes
+   ========================================================================== */
+
+export type ModoAnalista = 'cierre' | 'mitad_de_mes'
+
+export type ResultadoAnalista =
+  | {
+      readonly ok: true
+      readonly tipo: 'analisis'
+      readonly quitar: number
+      readonly meterMas: number
+      readonly mejorar: number
+      readonly runId: string
+      readonly costCents: number
+    }
+  | {
+      readonly ok: true
+      readonly tipo: 'escalado'
+      readonly pregunta: string
+      readonly runId: string
+    }
+  | { readonly ok: false; readonly code: string; readonly message: string; readonly runId?: string }
+
+/**
+ * El compositor del Analista: arma la lectura del mes desde los resultados por
+ * pieza, los totales del mes y lo que todavía no sale, corre el agente y —como el
+ * Analista `writes: []`— deja su propuesta en la bitácora (y en la Bandeja si
+ * escala). No escribe de vuelta al Context Card: los `learnings` son una
+ * propuesta, y aplicarlos es una acción humana aparte (regla #1).
+ *
+ * Una pieza publicada sin métricas capturadas se omite del análisis: no se puede
+ * leer lo que no se midió, y meterla en cero la haría ver como la peor del mes.
+ */
+export async function correrAnalista(
+  admin: SupabaseClient<Database>,
+  clientId: string,
+  month: MonthKey,
+  mode: ModoAnalista,
+  userId: string | null,
+  opciones: { omitirInterruptor?: boolean; trigger?: RunTrigger } = {},
+): Promise<ResultadoAnalista> {
+  const { data: cliente, error: errorCliente } = await admin
+    .from('clients')
+    .select('id, org_id')
+    .eq('id', clientId)
+    .maybeSingle()
+
+  if (errorCliente)
+    return {
+      ok: false,
+      code: 'lectura',
+      message: `No se pudo leer el cliente: ${errorCliente.message}`,
+    }
+  if (!cliente) return { ok: false, code: 'no_encontrado', message: 'No se encontró el cliente.' }
+
+  const { data: card } = await admin
+    .from('context_card_versions')
+    .select(
+      'id, version, what_it_is, positioning, differentiators, faqs, audience, tone, banned_words, approved_examples, cadence, created_at',
+    )
+    .eq('client_id', clientId)
+    .order('version', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (!card) {
+    return {
+      ok: false,
+      code: 'sin_context_card',
+      message:
+        'Este cliente no tiene Context Card. Toda corrida se registra con la versión con la que corrió; créala en Marca antes de analizar.',
+    }
+  }
+
+  const contextCard: ContextCard = {
+    id: card.id,
+    version: card.version,
+    whatItIs: card.what_it_is,
+    positioning: card.positioning,
+    differentiators: card.differentiators ?? [],
+    faqs: leerFaqs(card.faqs),
+    audience: card.audience,
+    tone: card.tone ?? [],
+    bannedWords: card.banned_words ?? [],
+    approvedExamples: card.approved_examples ?? [],
+    cadence: card.cadence,
+    createdAt: card.created_at,
+  }
+
+  const { data: piezas } = await admin
+    .from('pieces')
+    .select('id, format, pillar_id, hook, status, publish_at')
+    .eq('client_id', clientId)
+    .eq('month', month)
+
+  const { data: pilares } = await admin.from('pillars').select('id, name').eq('client_id', clientId)
+  const nombrePilar = new Map((pilares ?? []).map((p) => [p.id, p.name] as const))
+  const pilarDe = (id: string | null): string =>
+    id ? (nombrePilar.get(id) ?? 'Sin pilar') : 'Sin pilar'
+
+  const publicadas = (piezas ?? []).filter((p) => p.status === 'publicado' && p.publish_at)
+  const pendientesRaw = (piezas ?? []).filter((p) => p.status !== 'publicado' && p.publish_at)
+
+  // La última medición por pieza publicada. Igual que el Estratega: se ordena
+  // por `measured_at` desc y la primera que aparece por pieza gana.
+  const idsPublicadas = publicadas.map((p) => p.id)
+  const { data: mediciones } = idsPublicadas.length
+    ? await admin
+        .from('results_piece')
+        .select('piece_id, reach, interactions, saves, shares, measured_at')
+        .eq('client_id', clientId)
+        .in('piece_id', idsPublicadas)
+        .order('measured_at', { ascending: false })
+    : {
+        data: [] as {
+          piece_id: string
+          reach: number
+          interactions: number
+          saves: number
+          shares: number
+          measured_at: string
+        }[],
+      }
+
+  const ultima = new Map<
+    string,
+    { reach: number; interactions: number; saves: number; shares: number }
+  >()
+  for (const m of mediciones ?? []) {
+    if (!ultima.has(m.piece_id)) ultima.set(m.piece_id, m)
+  }
+
+  const medidas: PiezaMedida[] = []
+  for (const p of publicadas) {
+    const publishAt = p.publish_at
+    const m = ultima.get(p.id)
+    if (!publishAt || !m) continue
+    medidas.push({
+      piece_id: p.id,
+      format: p.format,
+      pillar: pilarDe(p.pillar_id),
+      published_at: publishAt,
+      hook: p.hook,
+      reach: m.reach,
+      interactions: m.interactions,
+      saves: m.saves,
+      shares: m.shares,
+    })
+  }
+
+  const pendientes: PiezaPendiente[] = []
+  for (const p of pendientesRaw) {
+    const publishAt = p.publish_at
+    if (!publishAt) continue
+    pendientes.push({
+      piece_id: p.id,
+      publish_at: publishAt,
+      format: p.format,
+      pillar: pilarDe(p.pillar_id),
+      hook: p.hook,
+      status: p.status,
+    })
+  }
+
+  const { data: mensual } = await admin
+    .from('results_monthly')
+    .select(
+      'reach, impressions, saves, shares, profile_visits, link_clicks, new_followers, updated_at',
+    )
+    .eq('client_id', clientId)
+    .eq('month', month)
+    .order('updated_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  // El objetivo del mes no tiene columna propia; se toma de la campaña más
+  // reciente del cliente (su `objective` es un objetivo declarado). Sin campaña,
+  // un default neutro: el objetivo solo matiza qué CTA propone el agente.
+  const { data: campanas } = await admin
+    .from('campaigns')
+    .select('objective, start_date')
+    .eq('client_id', clientId)
+    .order('start_date', { ascending: false })
+    .limit(1)
+  const monthGoal =
+    campanas?.[0]?.objective?.trim() || 'Crecer y mantener la cuenta activa este mes.'
+
+  const input: AgentInput<'analista'> = {
+    client_id: clientId,
+    month,
+    context_version: contextCard.version,
+    mode,
+    piece_performance: construirPiecePerformance(medidas),
+    monthly_totals: totalesDeMes(mensual ?? null),
+    unpublished_pieces: construirNoPublicadas(pendientes),
+    month_goal: monthGoal,
+  }
+
+  const proveedor = proveedorDeEnv()
+  if ('error' in proveedor) return { ok: false, code: 'config', message: proveedor.error }
+
+  const result = await runAgent('analista', input, {
+    orgId: cliente.org_id,
+    clientId,
+    contextCard: renderContextCard(contextCard),
+    contextVersion: contextCard.version,
+    trigger: opciones.trigger ?? 'manual',
+    triggeredBy: userId,
+    provider: proveedor,
+    store: createAgentStore(admin),
+    clock: systemClock,
+    configuredProvider: serverEnv().AGENTS_PROVIDER,
+    ...(opciones.omitirInterruptor ? { omitirInterruptor: true } : {}),
+  })
+
+  if (!result.ok) {
+    return {
+      ok: false,
+      code: result.error.code,
+      message: result.error.message,
+      ...(result.runId ? { runId: result.runId } : {}),
+    }
+  }
+
+  if (result.output.kind === 'escalamiento') {
+    return { ok: true, tipo: 'escalado', pregunta: result.output.pregunta, runId: result.runId }
+  }
+
+  const data = result.output.data
+  return {
+    ok: true,
+    tipo: 'analisis',
+    quitar: data.quitar.length,
+    meterMas: data.meter_mas.length,
+    mejorar: data.mejorar.length,
+    runId: result.runId,
+    costCents: result.costCents,
+  }
 }

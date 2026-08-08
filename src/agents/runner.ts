@@ -1,6 +1,12 @@
 import type { z } from 'zod'
 import type { AgentKey, Escalation } from '@/agents/contracts'
 import { contractFor, type AgentInput, type AgentOutput } from '@/agents/registry'
+import {
+  avisoDeCruce,
+  evaluarCorrida,
+  puedeCorrer,
+  type EvaluacionPresupuesto,
+} from '@/domain/presupuesto'
 import type { Clock } from '@/lib/time'
 
 /**
@@ -187,6 +193,14 @@ export type RunResult<K extends AgentKey> =
       readonly output: AgentOutput<K>
       readonly costCents: number
       readonly durationMs: number
+      /**
+       * El estado del tope tras esta corrida. `presupuesto.cruzoAviso` es la
+       * señal de "acabas de pasar el 80%": llega una sola vez, en la corrida que
+       * cruza, para que quien compone la corrida la levante (a la Bandeja, a un
+       * aviso) sin re-consultar la base. La regla del tope vive en
+       * `@/domain/presupuesto`, no aquí.
+       */
+      readonly presupuesto: EvaluacionPresupuesto
     }
   | { readonly ok: false; readonly runId: string | null; readonly error: AgentFailure }
 
@@ -252,7 +266,7 @@ export async function runAgent<K extends AgentKey>(
      Antes de llamar, no después. Un bug de reintentos no debe poder gastar mil
      dólares mientras nadie ve. */
   const spentCents = await ctx.store.spendThisMonthCents(ctx.clientId, agent)
-  if (spentCents >= policy.monthlyCapCents) {
+  if (!puedeCorrer({ topeCents: policy.monthlyCapCents, gastadoCents: spentCents })) {
     return {
       ok: false,
       runId: null,
@@ -382,7 +396,51 @@ export async function runAgent<K extends AgentKey>(
     })
   }
 
-  return { ok: true, runId, output, costCents: result.costCents, durationMs }
+  // El tope se evalúa con el gasto de ANTES de esta corrida (el que ya vio la
+  // Puerta 3) más lo que costó. `evaluarCorrida` decide si este fue el cruce del
+  // 80% — la aritmética del umbral no se repite aquí.
+  const presupuesto = evaluarCorrida({
+    topeCents: policy.monthlyCapCents,
+    gastadoAntesCents: spentCents,
+    costoCents: result.costCents,
+  })
+
+  // El cruce del 80% entra a la Bandeja como un escalamiento del agente. Es
+  // best-effort: si falla el registro del aviso, la corrida sigue siendo un
+  // éxito —ya está en la bitácora—, y romperla por no poder avisar sería peor.
+  if (presupuesto.cruzoAviso) {
+    await avisarCruce(ctx, agent, runId, policy.monthlyCapCents, presupuesto)
+  }
+
+  return { ok: true, runId, output, costCents: result.costCents, durationMs, presupuesto }
+}
+
+/**
+ * Levanta el aviso de cruce del tope como un escalamiento. Nunca propaga: un
+ * aviso que no se pudo guardar no debe tumbar una corrida que sí terminó bien.
+ */
+async function avisarCruce(
+  ctx: RunContext,
+  agent: AgentKey,
+  runId: string,
+  capCents: number,
+  presupuesto: EvaluacionPresupuesto,
+): Promise<void> {
+  try {
+    const aviso = avisoDeCruce(presupuesto.gastadoDespuesCents, capCents)
+    await ctx.store.recordEscalation({
+      orgId: ctx.orgId,
+      clientId: ctx.clientId,
+      agent,
+      runId,
+      pieceId: null,
+      severity: presupuesto.estadoDespues === 'agotado' ? 'alta' : 'media',
+      question: aviso.pregunta,
+      options: aviso.opciones,
+    })
+  } catch (cause) {
+    console.error('No se pudo registrar el aviso de cruce de presupuesto.', cause)
+  }
 }
 
 interface FailureLog {
