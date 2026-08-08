@@ -1,6 +1,7 @@
 'use client'
 
 import { Check, LoaderCircle, X } from 'lucide-react'
+import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   Button,
@@ -14,6 +15,26 @@ import {
 import { cn } from '@/lib/cn'
 import type { Semaforo } from '@/domain/redes'
 import { auditarCuentas, sincronizarRedes } from './acciones'
+
+/**
+ * La respuesta de `/api/jobs/auditor`. Se tipa lo mínimo que lee la UI; el
+ * contrato completo lo valida el servidor.
+ */
+type RespuestaAuditor =
+  | { ok: true; tipo: 'auditoria'; cuentas: number }
+  | { ok: true; tipo: 'escalado'; pregunta: string }
+  | { ok: false; message: string }
+
+function avisoDeAuditor(data: RespuestaAuditor): { tono: 'ok' | 'error'; texto: string } {
+  if (!data.ok) return { tono: 'error', texto: data.message }
+  if (data.tipo === 'escalado')
+    return { tono: 'ok', texto: 'El Auditor preguntó algo; está en la Bandeja.' }
+  const n = data.cuentas
+  return {
+    tono: 'ok',
+    texto: `Auditor: ${n} ${n === 1 ? 'cuenta auditada' : 'cuentas auditadas'}. El detalle está en la bitácora de Agentes.`,
+  }
+}
 
 /**
  * Las tarjetas de § Redes, con el botón de auditar.
@@ -81,6 +102,7 @@ export function PanelRedes({
   slug: string
   tarjetas: TarjetaRed[]
 }) {
+  const router = useRouter()
   const [corriendo, setCorriendo] = useState(false)
   const [destellando, setDestellando] = useState<readonly string[]>([])
   const [aviso, setAviso] = useState<{ tono: 'ok' | 'error'; texto: string } | null>(null)
@@ -132,6 +154,36 @@ export function PanelRedes({
     }
   }, [clientId, slug])
 
+  // El Auditor de IA (distinto del re-sello determinista de "Auditar cuentas"):
+  // corre el agente, que escribe sus hallazgos en account_audits y queda en la
+  // bitácora. Va por la ruta y no por Server Action porque escribe con
+  // service_role, que solo se permite en `api/jobs`. Sigue en mock hasta que se
+  // encienda el proveedor: entonces esta misma llamada empieza a costar.
+  const correrAuditor = useCallback(async () => {
+    setCorriendo(true)
+    setAviso(null)
+    setDestellando([])
+
+    let siguiente: { tono: 'ok' | 'error'; texto: string }
+    try {
+      const [res] = await Promise.all([
+        fetch('/api/jobs/auditor', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ clientId }),
+        }),
+        esperar(MINIMO_SPINNER_MS),
+      ])
+      siguiente = avisoDeAuditor((await res.json()) as RespuestaAuditor)
+    } catch {
+      siguiente = { tono: 'error', texto: 'No se pudo contactar al Auditor. Intenta de nuevo.' }
+    }
+
+    setCorriendo(false)
+    setAviso(siguiente)
+    if (siguiente.tono === 'ok') router.refresh()
+  }, [clientId, router])
+
   return (
     <>
       <div className="mb-6 flex flex-wrap items-center justify-end gap-3">
@@ -146,7 +198,16 @@ export function PanelRedes({
         </Button>
         <Button variant="agent" onClick={auditar} disabled={corriendo} aria-busy={corriendo}>
           {corriendo && <LoaderCircle aria-hidden className="size-3.5 animate-spin" />}
-          {corriendo ? 'Revisando cuentas' : 'Auditar cuentas'}
+          {corriendo ? 'Marcando' : 'Marcar revisadas'}
+        </Button>
+        <Button
+          variant="primary"
+          onClick={correrAuditor}
+          disabled={corriendo}
+          aria-busy={corriendo}
+        >
+          {corriendo && <LoaderCircle aria-hidden className="size-3.5 animate-spin" />}
+          {corriendo ? 'Corriendo Auditor' : 'Correr Auditor'}
         </Button>
       </div>
 

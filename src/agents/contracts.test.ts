@@ -9,6 +9,7 @@ import {
   type AgentPolicy,
   type AgentRunRecord,
   type AgentStore,
+  type BudgetAlertRecord,
   type EscalationRecord,
   type RunContext,
 } from '@/agents/runner'
@@ -345,6 +346,7 @@ const policy: AgentPolicy = { enabled: true, monthlyCapCents: 500, model: null }
 function makeStore(overrides: Partial<AgentStore> = {}) {
   const runs: AgentRunRecord[] = []
   const escalations: EscalationRecord[] = []
+  const alerts: BudgetAlertRecord[] = []
   const store: AgentStore = {
     loadPolicy: async () => policy,
     spendThisMonthCents: async () => 0,
@@ -355,9 +357,12 @@ function makeStore(overrides: Partial<AgentStore> = {}) {
     recordEscalation: async (escalation) => {
       escalations.push(escalation)
     },
+    recordBudgetAlert: async (alert) => {
+      alerts.push(alert)
+    },
     ...overrides,
   }
-  return { store, runs, escalations }
+  return { store, runs, escalations, alerts }
 }
 
 function makeCtx(store: AgentStore): RunContext {
@@ -444,6 +449,30 @@ describe('runAgent', () => {
     expect(escalations).toHaveLength(1)
     expect(escalations.at(0)?.agent).toBe('editor_marca')
     expect(escalations.at(0)?.options).toHaveLength(3)
+  })
+
+  it('registra el aviso de presupuesto y escala cuando la corrida cruza el 80%', async () => {
+    // 399¢ de un tope de 500¢ = 79.8%; el costo de esta corrida lo empuja al 80%.
+    const { store, alerts, escalations } = makeStore({ spendThisMonthCents: async () => 399 })
+    const result = await runAgent('estratega', TOWER_BAR_INPUTS.estratega, makeCtx(store))
+
+    expect(result.ok).toBe(true)
+    // El log inmutable queda con el gasto ya cruzado y el tope contra el que se midió.
+    expect(alerts).toHaveLength(1)
+    expect(alerts.at(0)?.agent).toBe('estratega')
+    expect(alerts.at(0)?.capCents).toBe(500)
+    expect(alerts.at(0)?.spentCents).toBeGreaterThanOrEqual(400)
+    // Y el cruce entra a la Bandeja como escalamiento.
+    expect(escalations.some((e) => e.question.includes('tope de gasto'))).toBe(true)
+  })
+
+  it('no registra aviso de presupuesto si la corrida no cruza el 80%', async () => {
+    // Gasto previo 0 y un costo chico: no se acerca al tope.
+    const { store, alerts } = makeStore()
+    const result = await runAgent('estratega', TOWER_BAR_INPUTS.estratega, makeCtx(store))
+
+    expect(result.ok).toBe(true)
+    expect(alerts).toHaveLength(0)
   })
 
   it('se niega a usar un proveedor distinto al configurado', async () => {
