@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { Button, Display, Mono } from '@/components/ui/primitives'
+import { formatDate } from '@/lib/time'
 import { guardarNotaDeMarca } from './acciones'
 
 export function NotaDeMarcaSection({
@@ -111,7 +112,11 @@ function VistaNota({
         </Button>
         <Mono className="text-fg-muted text-xs">
           Último cambio:{' '}
-          {new Date(nota.updatedAt).toLocaleDateString('es-MX', {
+          {/* formatDate fija la zona del estudio (Tijuana). Un `toLocaleDateString`
+              sin timeZone formatea en la zona del runtime: UTC en el servidor,
+              la del navegador en el cliente → el texto no coincide y React tira
+              el error #418 de hidratación. Ya mordió: rompía el planner en e2e. */}
+          {formatDate(new Date(nota.updatedAt), {
             day: 'numeric',
             month: 'short',
             year: 'numeric',
