@@ -114,6 +114,21 @@ export interface EscalationRecord {
 }
 
 /**
+ * El renglón append-only de `budget_alerts`: el log inmutable del cruce del tope.
+ * Es la contraparte del escalamiento (que es lo accionable en la Bandeja); este
+ * es la auditoría de cuánto se llevaba y contra qué tope cuando se cruzó.
+ */
+export interface BudgetAlertRecord {
+  readonly orgId: string
+  readonly clientId: string
+  readonly agent: AgentKey
+  readonly runId: string
+  readonly spentCents: number
+  readonly capCents: number
+  readonly estado: 'aviso' | 'agotado'
+}
+
+/**
  * Lo que el runner necesita de la base, expresado como interfaz para poder
  * inyectar un doble en pruebas.
  *
@@ -127,6 +142,8 @@ export interface AgentStore {
   /** Devuelve el id de la corrida registrada. */
   recordRun(run: AgentRunRecord): Promise<string>
   recordEscalation(escalation: EscalationRecord): Promise<void>
+  /** Registra el cruce del tope en el log append-only de avisos. */
+  recordBudgetAlert(alert: BudgetAlertRecord): Promise<void>
 }
 
 /* -------------------------------------------------------------------------- */
@@ -426,6 +443,25 @@ async function avisarCruce(
   capCents: number,
   presupuesto: EvaluacionPresupuesto,
 ): Promise<void> {
+  const estado = presupuesto.estadoDespues === 'agotado' ? 'agotado' : 'aviso'
+
+  // El log inmutable (budget_alerts) y el escalamiento a la Bandeja son dos
+  // cosas: uno audita, el otro pide acción. Van en try/catch separados para que
+  // si falla uno, el otro igual quede — y ninguno tumbe una corrida exitosa.
+  try {
+    await ctx.store.recordBudgetAlert({
+      orgId: ctx.orgId,
+      clientId: ctx.clientId,
+      agent,
+      runId,
+      spentCents: presupuesto.gastadoDespuesCents,
+      capCents,
+      estado,
+    })
+  } catch (cause) {
+    console.error('No se pudo registrar el aviso de presupuesto en la bitácora.', cause)
+  }
+
   try {
     const aviso = avisoDeCruce(presupuesto.gastadoDespuesCents, capCents)
     await ctx.store.recordEscalation({
@@ -434,7 +470,7 @@ async function avisarCruce(
       agent,
       runId,
       pieceId: null,
-      severity: presupuesto.estadoDespues === 'agotado' ? 'alta' : 'media',
+      severity: estado === 'agotado' ? 'alta' : 'media',
       question: aviso.pregunta,
       options: aviso.opciones,
     })

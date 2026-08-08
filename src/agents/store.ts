@@ -1,6 +1,12 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { AgentKey } from '@/agents/contracts'
-import type { AgentPolicy, AgentRunRecord, AgentStore, EscalationRecord } from '@/agents/runner'
+import type {
+  AgentPolicy,
+  AgentRunRecord,
+  AgentStore,
+  BudgetAlertRecord,
+  EscalationRecord,
+} from '@/agents/runner'
 import type { Database, Json } from '@/lib/supabase/database.types'
 import { systemClock } from '@/lib/time'
 
@@ -94,6 +100,19 @@ export function createAgentStore(admin: SupabaseClient<Database>): AgentStore {
         options: escalation.options as Json,
       })
       if (error) throw new Error(`No se pudo registrar el escalamiento: ${error.message}`)
+    },
+
+    async recordBudgetAlert(alert: BudgetAlertRecord): Promise<void> {
+      const { error } = await admin.from('budget_alerts').insert({
+        org_id: alert.orgId,
+        client_id: alert.clientId,
+        agent: alert.agent,
+        run_id: alert.runId,
+        spent_cents: alert.spentCents,
+        cap_cents: alert.capCents,
+        estado: alert.estado,
+      })
+      if (error) throw new Error(`No se pudo registrar el aviso de presupuesto: ${error.message}`)
     },
   }
 }
