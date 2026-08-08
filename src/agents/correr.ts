@@ -6,7 +6,7 @@ import { renderContextCard } from '@/agents/context-card'
 import { createAnthropicProvider } from '@/agents/providers/anthropic'
 import { createMockProvider } from '@/agents/providers/mock'
 import type { AgentInput } from '@/agents/registry'
-import { runAgent, type AgentProvider } from '@/agents/runner'
+import { runAgent, type AgentProvider, type RunTrigger } from '@/agents/runner'
 import { createAgentStore } from '@/agents/store'
 import {
   construirNoPublicadas,
@@ -597,8 +597,8 @@ export type ResultadoAuditor =
 export async function correrAuditor(
   admin: SupabaseClient<Database>,
   clientId: string,
-  userId: string,
-  opciones: { omitirInterruptor?: boolean } = {},
+  userId: string | null,
+  opciones: { omitirInterruptor?: boolean; trigger?: RunTrigger } = {},
 ): Promise<ResultadoAuditor> {
   const { data: cliente, error: errorCliente } = await admin
     .from('clients')
@@ -692,7 +692,7 @@ export async function correrAuditor(
     clientId,
     contextCard: renderContextCard(contextCard),
     contextVersion: contextCard.version,
-    trigger: 'manual',
+    trigger: opciones.trigger ?? 'manual',
     triggeredBy: userId,
     provider: proveedor,
     store: createAgentStore(admin),
@@ -787,8 +787,8 @@ export async function correrAnalista(
   clientId: string,
   month: MonthKey,
   mode: ModoAnalista,
-  userId: string,
-  opciones: { omitirInterruptor?: boolean } = {},
+  userId: string | null,
+  opciones: { omitirInterruptor?: boolean; trigger?: RunTrigger } = {},
 ): Promise<ResultadoAnalista> {
   const { data: cliente, error: errorCliente } = await admin
     .from('clients')
@@ -955,7 +955,7 @@ export async function correrAnalista(
     clientId,
     contextCard: renderContextCard(contextCard),
     contextVersion: contextCard.version,
-    trigger: 'manual',
+    trigger: opciones.trigger ?? 'manual',
     triggeredBy: userId,
     provider: proveedor,
     store: createAgentStore(admin),
