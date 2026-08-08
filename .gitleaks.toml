@@ -82,4 +82,10 @@ regexes = [
   '''postgres(ql)?://postgres:postgres@(127\.0\.0\.1|localhost)''',
   '''your-[a-z-]+-here''',
   '''<[A-Z_]+>''',
+  # `secret: N8N_INBOUND_SECRET` en el envío por n8n es el NOMBRE de la variable
+  # de entorno —una referencia—, no un secreto pegado: el valor real vive en
+  # .env.local (regla #4). El escáner ve `secret: <identificador>` y lo marca.
+  # Se permite el identificador, que nunca es un valor; un secreto real filtrado
+  # seguiría siendo un valor y sí lo cacharía.
+  '''N8N_INBOUND_SECRET''',
 ]
