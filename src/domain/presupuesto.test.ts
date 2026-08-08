@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  avisoDeCruce,
   estadoDePresupuesto,
   evaluarCorrida,
   puedeCorrer,
@@ -98,5 +99,22 @@ describe('evaluarCorrida', () => {
   it('reporta la fracción para mostrar', () => {
     const e = evaluarCorrida({ topeCents: 500, gastadoAntesCents: 200, costoCents: 50 })
     expect(e.fraccionDespues).toBeCloseTo(0.5)
+  })
+})
+
+describe('avisoDeCruce', () => {
+  it('arma la pregunta con el porcentaje y los montos en dólares', () => {
+    const aviso = avisoDeCruce(410, 500)
+    expect(aviso.pregunta).toContain('82%') // 410/500
+    expect(aviso.pregunta).toContain('$4.10 de $5.00 USD')
+  })
+
+  it('ofrece subir el tope, pausar o seguir', () => {
+    const keys = avisoDeCruce(410, 500).opciones.map((o) => o.key)
+    expect(keys).toEqual(['subir_tope', 'pausar', 'seguir'])
+  })
+
+  it('no truena con tope 0: reporta 100%', () => {
+    expect(avisoDeCruce(0, 0).pregunta).toContain('100%')
   })
 })

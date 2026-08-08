@@ -1,7 +1,12 @@
 import type { z } from 'zod'
 import type { AgentKey, Escalation } from '@/agents/contracts'
 import { contractFor, type AgentInput, type AgentOutput } from '@/agents/registry'
-import { evaluarCorrida, puedeCorrer, type EvaluacionPresupuesto } from '@/domain/presupuesto'
+import {
+  avisoDeCruce,
+  evaluarCorrida,
+  puedeCorrer,
+  type EvaluacionPresupuesto,
+} from '@/domain/presupuesto'
 import type { Clock } from '@/lib/time'
 
 /**
@@ -400,7 +405,42 @@ export async function runAgent<K extends AgentKey>(
     costoCents: result.costCents,
   })
 
+  // El cruce del 80% entra a la Bandeja como un escalamiento del agente. Es
+  // best-effort: si falla el registro del aviso, la corrida sigue siendo un
+  // éxito —ya está en la bitácora—, y romperla por no poder avisar sería peor.
+  if (presupuesto.cruzoAviso) {
+    await avisarCruce(ctx, agent, runId, policy.monthlyCapCents, presupuesto)
+  }
+
   return { ok: true, runId, output, costCents: result.costCents, durationMs, presupuesto }
+}
+
+/**
+ * Levanta el aviso de cruce del tope como un escalamiento. Nunca propaga: un
+ * aviso que no se pudo guardar no debe tumbar una corrida que sí terminó bien.
+ */
+async function avisarCruce(
+  ctx: RunContext,
+  agent: AgentKey,
+  runId: string,
+  capCents: number,
+  presupuesto: EvaluacionPresupuesto,
+): Promise<void> {
+  try {
+    const aviso = avisoDeCruce(presupuesto.gastadoDespuesCents, capCents)
+    await ctx.store.recordEscalation({
+      orgId: ctx.orgId,
+      clientId: ctx.clientId,
+      agent,
+      runId,
+      pieceId: null,
+      severity: presupuesto.estadoDespues === 'agotado' ? 'alta' : 'media',
+      question: aviso.pregunta,
+      options: aviso.opciones,
+    })
+  } catch (cause) {
+    console.error('No se pudo registrar el aviso de cruce de presupuesto.', cause)
+  }
 }
 
 interface FailureLog {

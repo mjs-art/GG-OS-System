@@ -105,3 +105,32 @@ export function evaluarCorrida({
     fraccionDespues: topeCents > 0 ? gastadoDespuesCents / topeCents : 1,
   }
 }
+
+export interface AvisoDeCruce {
+  readonly pregunta: string
+  readonly opciones: { key: string; label: string }[]
+}
+
+/**
+ * El texto y las opciones del aviso cuando un agente cruza su tope.
+ *
+ * El cruce llega a la Bandeja como un **escalamiento** —el agente levantando la
+ * mano—, no como una "alerta" aparte: preguntar qué hacer cuando el dinero se
+ * está acabando es justo lo que debe hacer un agente que no decide gastar solo.
+ * Por eso esto devuelve una pregunta con opciones, la misma forma que cualquier
+ * otro escalamiento. La tarjeta ya muestra de qué agente es; el texto no repite
+ * la llave.
+ */
+export function avisoDeCruce(gastadoDespuesCents: number, topeCents: number): AvisoDeCruce {
+  const pct = topeCents > 0 ? Math.round((gastadoDespuesCents / topeCents) * 100) : 100
+  const gastado = (gastadoDespuesCents / 100).toFixed(2)
+  const tope = (topeCents / 100).toFixed(2)
+  return {
+    pregunta: `Este agente llegó al ${pct}% de su tope de gasto del mes ($${gastado} de $${tope} USD). ¿Cómo sigo?`,
+    opciones: [
+      { key: 'subir_tope', label: 'Subir el tope de este agente' },
+      { key: 'pausar', label: 'Pausarlo el resto del mes' },
+      { key: 'seguir', label: 'Que siga hasta el tope' },
+    ],
+  }
+}
