@@ -1,4 +1,5 @@
 import { CambiosDeMitadDeMes } from '@/components/resultados/cambios-mitad-de-mes'
+import { CorrerAnalistaBoton } from '@/components/resultados/correr-analista-boton'
 import { Card, Chip, Display, Mono } from '@/components/ui/primitives'
 import type { LecturaDelAnalista } from '@/lib/datos/resultados'
 import { formatDate, formatMonthKey, type MonthKey } from '@/lib/time'
@@ -31,10 +32,13 @@ export function LecturaDelMes({
           Lectura del mes
         </Display>
         <p className="text-fg-muted mt-3 max-w-prose text-[13px]">
-          El Analista todavía no lee {formatMonthKey(mes)}. Corre el día 3 con el mes cerrado y a
-          mitad de mes en modo ligero; también lo puedes disparar desde Agentes. Necesita los
-          números capturados para tener con qué comparar.
+          El Analista todavía no lee {formatMonthKey(mes)}. Corre solo el día 3 con el mes cerrado,
+          pero lo puedes disparar ahora. Necesita los números capturados para tener con qué
+          comparar.
         </p>
+        <div className="mt-4">
+          <CorrerAnalistaBoton clientId={clientId} mes={mes} />
+        </div>
       </Card>
     )
   }
@@ -54,6 +58,10 @@ export function LecturaDelMes({
         Lectura del mes
       </Display>
       <p className="mt-3 max-w-prose text-[13px]">{reporte.lectura_del_mes}</p>
+
+      <div className="mt-4">
+        <CorrerAnalistaBoton clientId={clientId} mes={mes} />
+      </div>
 
       <div className="mt-8 grid grid-cols-1 gap-8 md:grid-cols-3">
         <Columna titulo="Quitar" hallazgos={reporte.quitar} />
