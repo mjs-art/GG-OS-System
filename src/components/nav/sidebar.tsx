@@ -1,6 +1,6 @@
 'use client'
 
-import { CalendarDays, Inbox, Settings, Sparkles, Users } from 'lucide-react'
+import { CalendarDays, Inbox, MessageCircle, Settings, Sparkles, Users } from 'lucide-react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useState } from 'react'
@@ -17,6 +17,7 @@ import { cn } from '@/lib/cn'
 const ENLACES = [
   { href: '/', label: 'Bandeja', icon: Inbox },
   { href: '/clientes', label: 'Clientes', icon: Users },
+  { href: '/whatsapp', label: 'WhatsApp', icon: MessageCircle },
   { href: '/calendario', label: 'Calendario', icon: CalendarDays },
   { href: '/agentes', label: 'Agentes', icon: Sparkles },
   { href: '/ajustes', label: 'Ajustes', icon: Settings },

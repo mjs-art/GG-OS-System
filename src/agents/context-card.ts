@@ -1,4 +1,6 @@
-import type { ContextCard } from '@/lib/datos/secciones'
+import type { SupabaseClient } from '@supabase/supabase-js'
+import type { ContextCard, PreguntaFrecuente } from '@/lib/datos/secciones'
+import type { Database, Json } from '@/lib/supabase/database.types'
 
 /**
  * Convierte el Context Card en el texto que va al system prompt del agente.
@@ -37,4 +39,56 @@ export function renderContextCard(card: ContextCard): string {
   }
 
   return bloques.join('\n\n')
+}
+
+/** Las FAQs viven en jsonb; se leen sin confiar en su forma. */
+function leerFaqs(valor: Json): PreguntaFrecuente[] {
+  if (!Array.isArray(valor)) return []
+  return valor.flatMap((item) => {
+    if (item && typeof item === 'object' && !Array.isArray(item)) {
+      const o = item as Record<string, unknown>
+      if (typeof o['pregunta'] === 'string' && typeof o['respuesta'] === 'string') {
+        return [{ pregunta: o['pregunta'], respuesta: o['respuesta'] }]
+      }
+    }
+    return []
+  })
+}
+
+/**
+ * Carga la última versión del Context Card de un cliente. Lo usan los
+ * compositores de agentes, que ya leen con el cliente admin porque la ruta
+ * autorizó antes. Devuelve `null` si el cliente todavía no tiene memoria de
+ * marca — el compositor decide qué hacer con eso.
+ */
+export async function cargarContextCard(
+  admin: SupabaseClient<Database>,
+  clientId: string,
+): Promise<ContextCard | null> {
+  const { data: card } = await admin
+    .from('context_card_versions')
+    .select(
+      'id, version, what_it_is, positioning, differentiators, faqs, audience, tone, banned_words, approved_examples, cadence, created_at',
+    )
+    .eq('client_id', clientId)
+    .order('version', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (!card) return null
+
+  return {
+    id: card.id,
+    version: card.version,
+    whatItIs: card.what_it_is,
+    positioning: card.positioning,
+    differentiators: card.differentiators ?? [],
+    faqs: leerFaqs(card.faqs),
+    audience: card.audience,
+    tone: card.tone ?? [],
+    bannedWords: card.banned_words ?? [],
+    approvedExamples: card.approved_examples ?? [],
+    cadence: card.cadence,
+    createdAt: card.created_at,
+  }
 }

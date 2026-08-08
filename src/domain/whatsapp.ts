@@ -66,3 +66,94 @@ export const payloadN8nSchema = z.discriminatedUnion('tipo', [entranteSchema, re
 export type PayloadN8n = z.infer<typeof payloadN8nSchema>
 export type EntranteWhatsApp = z.infer<typeof entranteSchema>
 export type ReporteWhatsApp = z.infer<typeof reporteSchema>
+export type MediaWhatsApp = z.infer<typeof mediaSchema>
+
+/**
+ * Lee una lista de adjuntos guardada en jsonb sin confiar en su forma. Es
+ * nuestro dato, pero jsonb no tiene tipo: un adjunto viejo con otra forma no
+ * debe tumbar la bandeja, así que lo que no cumple se descarta.
+ */
+export function parsearMedia(value: unknown): MediaWhatsApp[] {
+  const parsed = z.array(mediaSchema).safeParse(value ?? [])
+  return parsed.success ? parsed.data : []
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Vistas de la bandeja de salientes                                          */
+/*                                                                             */
+/*  Tipos que cruzan de la carga (server-only) al componente cliente. Viven    */
+/*  aquí, en un módulo sin directiva, por la misma trampa que documenta        */
+/*  CLAUDE.md: un valor de un módulo 'use client' importado en el servidor     */
+/*  llega como referencia, no como valor. Los tipos no, pero se agrupan aquí   */
+/*  para no volver a cruzar esa línea sin querer.                              */
+/* -------------------------------------------------------------------------- */
+
+/** Un borrador de saliente esperando aprobación. */
+export interface SalienteWhatsApp {
+  id: string
+  body: string | null
+  status: 'borrador' | 'aprobado'
+  /** El agente que lo redactó, o `null` si lo escribió una persona. */
+  authoredByAgent: string | null
+  /** Fotos y propuestas adjuntas, en el orden en que se anexaron. */
+  media: MediaWhatsApp[]
+  createdAt: string
+}
+
+/** Una conversación con al menos un saliente pendiente, y su contexto. */
+export interface HiloWhatsApp {
+  conversationId: string
+  clienteNombre: string
+  waPhone: string
+  /** El último mensaje del cliente, para juzgar la respuesta sin cambiar de vista. */
+  ultimoEntrante: { id: string; body: string | null; createdAt: string } | null
+  salientes: SalienteWhatsApp[]
+}
+
+/** La clase de retro, espejo del CHECK de `wa_feedback`. */
+export type TipoRetro = 'aprobacion' | 'cambio' | 'comentario'
+
+/** Una retro del cliente todavía sin resolver. */
+export interface RetroWhatsApp {
+  id: string
+  clienteNombre: string
+  body: string
+  kind: TipoRetro
+  createdAt: string
+}
+
+/**
+ * Lo que la app le manda a n8n para que envíe un saliente ya aprobado. n8n no
+ * toca la base: recibe a dónde, qué texto y qué adjuntos, y devuelve el reporte
+ * citando `message_id` — nuestro uuid, para que el `enviado` caiga en la fila
+ * correcta.
+ */
+export interface EnvioN8n {
+  message_id: string
+  to: string
+  text: string | null
+  media: MediaWhatsApp[]
+}
+
+/**
+ * Arma el payload de envío a partir de un saliente ya aprobado y el teléfono de
+ * su conversación. Es pura: no toca la red ni la base, así que se prueba con
+ * casos.
+ *
+ * Devuelve `null` cuando no hay nada que mandar —ni texto ni adjuntos— o cuando
+ * el `media` guardado no cuadra con el contrato. En ambos casos preferimos no
+ * enviar a enviar a medias: un WhatsApp vacío o con un adjunto roto es peor que
+ * ninguno, y el borrador se queda para arreglarlo.
+ */
+export function construirEnvioN8n(
+  mensaje: { id: string; body: string | null; media: unknown },
+  telefono: string,
+): EnvioN8n | null {
+  const media = z.array(mediaSchema).safeParse(mensaje.media ?? [])
+  if (!media.success) return null
+
+  const texto = mensaje.body?.trim() ? mensaje.body : null
+  if (!texto && media.data.length === 0) return null
+
+  return { message_id: mensaje.id, to: telefono, text: texto, media: media.data }
+}
