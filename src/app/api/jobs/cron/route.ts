@@ -69,7 +69,12 @@ async function manejar(request: Request): Promise<Response> {
     )
   }
 
-  const clientIds = [...new Set((policies ?? []).map((p) => p.client_id))]
+  // `analista` y `auditor` siempre corren por cliente — el `client_id` nulo es
+  // el caso de un agente sin cliente (hoy solo el investigador), que no tiene
+  // job de cron. Se filtra defensivamente en vez de asumirlo.
+  const clientIds = [
+    ...new Set((policies ?? []).map((p) => p.client_id).filter((id): id is string => id !== null)),
+  ]
 
   // El mes que acaba de cerrar: el Analista de cierre corre el día 3 sobre el mes
   // anterior completo. En UTC, sin crear un Date fuera de @/lib/time.

@@ -22,20 +22,22 @@ import { systemClock } from '@/lib/time'
  */
 export function createAgentStore(admin: SupabaseClient<Database>): AgentStore {
   return {
-    async loadPolicy(clientId: string, agent: AgentKey): Promise<AgentPolicy | null> {
-      const { data, error } = await admin
+    async loadPolicy(clientId: string | null, agent: AgentKey): Promise<AgentPolicy | null> {
+      let query = admin
         .from('agent_policies')
         .select('enabled, monthly_cap_cents, model')
-        .eq('client_id', clientId)
         .eq('agent', agent)
-        .maybeSingle()
+      // `.eq('client_id', null)` no compila a `is null` en PostgREST — hay que
+      // separar la rama, igual que en `spendThisMonthCents`.
+      query = clientId === null ? query.is('client_id', null) : query.eq('client_id', clientId)
+      const { data, error } = await query.maybeSingle()
 
       if (error) throw new Error(`No se pudo leer la política del agente: ${error.message}`)
       if (!data) return null
       return { enabled: data.enabled, monthlyCapCents: data.monthly_cap_cents, model: data.model }
     },
 
-    async spendThisMonthCents(clientId: string, agent: AgentKey): Promise<number> {
+    async spendThisMonthCents(clientId: string | null, agent: AgentKey): Promise<number> {
       // `app.agent_spend_cents_this_month` vive en el esquema `app`, que PostgREST
       // no expone, así que no se puede llamar por `.rpc()`. Se suma aquí lo mismo
       // que suma esa función: el gasto del mes en curso. El inicio de mes se
@@ -46,12 +48,13 @@ export function createAgentStore(admin: SupabaseClient<Database>): AgentStore {
       const mm = String(ahora.getUTCMonth() + 1).padStart(2, '0')
       const inicioMes = `${y}-${mm}-01T00:00:00.000Z`
 
-      const { data, error } = await admin
+      let query = admin
         .from('agent_runs')
         .select('cost_cents')
-        .eq('client_id', clientId)
         .eq('agent', agent)
         .gte('started_at', inicioMes)
+      query = clientId === null ? query.is('client_id', null) : query.eq('client_id', clientId)
+      const { data, error } = await query
 
       if (error) throw new Error(`No se pudo leer el gasto del agente: ${error.message}`)
       return (data ?? []).reduce((suma, r) => suma + r.cost_cents, 0)

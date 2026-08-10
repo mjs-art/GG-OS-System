@@ -44,7 +44,7 @@ export interface ProviderRequest<K extends AgentKey = AgentKey> {
   readonly input: AgentInput<K>
   /** El Context Card ya renderizado a texto. El runner no lo arma; lo recibe. */
   readonly contextCard: string
-  readonly contextVersion: number
+  readonly contextVersion: number | null
   readonly model: string | null
   readonly signal?: AbortSignal
 }
@@ -84,12 +84,13 @@ export interface AgentPolicy {
 
 export interface AgentRunRecord {
   readonly orgId: string
-  readonly clientId: string
+  /** `null` en corridas sin cliente — hoy solo un agente de investigación las usa. */
+  readonly clientId: string | null
   readonly agent: AgentKey
   readonly status: 'ok' | 'error'
   readonly trigger: RunTrigger
   readonly triggeredBy: string | null
-  readonly contextVersion: number
+  readonly contextVersion: number | null
   readonly model: string | null
   readonly input: unknown
   readonly output: unknown
@@ -104,7 +105,7 @@ export interface AgentRunRecord {
 
 export interface EscalationRecord {
   readonly orgId: string
-  readonly clientId: string
+  readonly clientId: string | null
   readonly agent: AgentKey
   readonly runId: string
   readonly pieceId: string | null
@@ -120,7 +121,7 @@ export interface EscalationRecord {
  */
 export interface BudgetAlertRecord {
   readonly orgId: string
-  readonly clientId: string
+  readonly clientId: string | null
   readonly agent: AgentKey
   readonly runId: string
   readonly spentCents: number
@@ -135,10 +136,14 @@ export interface BudgetAlertRecord {
  * `spendThisMonthCents` es exactamente `app.agent_spend_cents_this_month`:
  * la suma vive en la base porque es la única que ve todas las corridas,
  * incluidas las de otro proceso corriendo al mismo tiempo.
+ *
+ * `clientId: null` es la política/gasto "de la agencia" — la que usa un agente
+ * que no está atado a un cliente. Hay a lo más una fila así por `(org, agente)`
+ * (índice único parcial en la migración de agentes sin cliente).
  */
 export interface AgentStore {
-  loadPolicy(clientId: string, agent: AgentKey): Promise<AgentPolicy | null>
-  spendThisMonthCents(clientId: string, agent: AgentKey): Promise<number>
+  loadPolicy(clientId: string | null, agent: AgentKey): Promise<AgentPolicy | null>
+  spendThisMonthCents(clientId: string | null, agent: AgentKey): Promise<number>
   /** Devuelve el id de la corrida registrada. */
   recordRun(run: AgentRunRecord): Promise<string>
   recordEscalation(escalation: EscalationRecord): Promise<void>
@@ -154,9 +159,11 @@ export type RunTrigger = 'manual' | 'cron' | 'evento'
 
 export interface RunContext {
   readonly orgId: string
-  readonly clientId: string
+  /** `null` en corridas sin cliente — ver `AgentStore`. */
+  readonly clientId: string | null
   readonly contextCard: string
-  readonly contextVersion: number
+  /** `null` cuando no hay Context Card de cliente (corrida sin cliente). */
+  readonly contextVersion: number | null
   readonly trigger: RunTrigger
   readonly triggeredBy: string | null
   readonly provider: AgentProvider
