@@ -47,6 +47,9 @@ const RUTEO: Record<AgentKey, { model: string; effort: Effort }> = {
   pautero: { model: MODELO_DEFAULT, effort: 'high' },
   auditor: { model: MODELO_DEFAULT, effort: 'high' },
   cuenta: { model: MODELO_DEFAULT, effort: 'medium' },
+  // Resumir una transcripción no pide el razonamiento de estrategia: esfuerzo
+  // bajo, como el Editor de marca.
+  investigador: { model: MODELO_DEFAULT, effort: 'low' },
 }
 
 /** Centavos de USD por millón de tokens. Default = tarifa de Opus 4.8. */

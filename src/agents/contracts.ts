@@ -2,7 +2,7 @@ import { z } from 'zod'
 import { isMonthKey, type MonthKey } from '@/lib/time'
 
 /**
- * Los contratos de los ocho agentes: qué reciben y qué devuelven.
+ * Los contratos de los agentes: qué reciben y qué devuelven.
  *
  * Por qué existe este archivo y no un `any` con un prompt bonito: la salida de
  * un modelo es entrada no confiable. Si no se valida contra un schema, un
@@ -29,6 +29,7 @@ export const AGENT_KEYS = [
   'pautero',
   'auditor',
   'cuenta',
+  'investigador',
 ] as const
 
 export type AgentKey = (typeof AGENT_KEYS)[number]
@@ -856,3 +857,48 @@ const cuentaResultSchema = z.discriminatedUnion('task', [
 ])
 
 export const cuentaOutputSchema = outputOf(cuentaResultSchema)
+
+/* -------------------------------------------------------------------------- */
+/*  ⑨ INVESTIGADOR — resume un video de YouTube y propone qué hacer con él.    */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * No extiende `baseInput`: no hay mes (no es trabajo del calendario de un
+ * cliente) y el cliente es OPCIONAL, al revés que los otros ocho. Una
+ * investigación puede ser general (`client_id: null`) o ya saberse de qué
+ * cliente es desde que se corre — pero nunca se reasigna después: la corrida
+ * y su resultado en `video_summaries` son append-only.
+ *
+ * La transcripción ya llega bajada (por un workflow de n8n, hoy) — este
+ * contrato no sabe ni le importa de dónde salió.
+ */
+export const investigadorInputSchema = z.object({
+  client_id: uuidSchema.nullable(),
+  youtube_url: z.url(),
+  video_title: z.string().trim().min(1).nullable(),
+  transcript: nonEmpty,
+})
+
+export const accionSugeridaTipoSchema = z.enum([
+  'profundizar',
+  'guion_propio',
+  'post',
+  'newsletter',
+  'otro',
+])
+
+const investigacionSchema = z.object({
+  resumen: nonEmpty,
+  puntos_clave: z.array(nonEmpty).min(1),
+  acciones_sugeridas: z
+    .array(
+      z.object({
+        tipo: accionSugeridaTipoSchema,
+        titulo: nonEmpty,
+        detalle: nonEmpty,
+      }),
+    )
+    .min(1),
+})
+
+export const investigadorOutputSchema = outputOf(investigacionSchema)

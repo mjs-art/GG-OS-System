@@ -367,6 +367,16 @@ export const TOWER_BAR_INPUTS: { [K in AgentKey]: AgentInput<K> } = {
     previous_month_headline: 'Agosto cerró con 38,400 de alcance y 142 seguidores nuevos.',
     last_client_response_days_ago: 6,
   },
+
+  investigador: {
+    client_id: CLIENT_ID,
+    youtube_url: 'https://www.youtube.com/watch?v=towerbar-detras-de-barra',
+    video_title: 'Cómo grabar contenido de bar sin mostrar la cara del staff',
+    transcript:
+      'En este video hablamos de cómo grabar contenido de bartenders sin mostrar la cara del ' +
+      'equipo, usando planos de manos y de la barra. También explicamos por qué la música en ' +
+      'vivo sostiene la retención en los primeros tres segundos de un reel.',
+  },
 }
 
 /* -------------------------------------------------------------------------- */
@@ -1028,6 +1038,32 @@ const BUILDERS: { [K in AgentKey]: MockBuilder<K> } = {
       },
     }
   },
+
+  investigador: (input) => ({
+    kind: 'resultado',
+    data: {
+      resumen:
+        'El video explica cómo grabar contenido de bar sin mostrar la cara del staff, con planos ' +
+        'de manos y de la barra, y por qué la música en vivo sostiene la retención al inicio del reel.',
+      puntos_clave: [
+        'Planos de manos y de la barra funcionan sin mostrar al equipo.',
+        'La música en vivo ayuda a la retención en los primeros tres segundos.',
+      ],
+      acciones_sugeridas: [
+        {
+          tipo: 'guion_propio',
+          titulo: 'Serie "detrás de la barra" sin caras',
+          detalle: `Adaptar la idea de "${input.video_title ?? 'este video'}" a un reel propio con planos de manos y hielo.`,
+        },
+        {
+          tipo: 'post',
+          titulo: 'Post sobre por qué la música en vivo sube la retención',
+          detalle:
+            'Carrusel corto citando el hallazgo del video para justificar más música en vivo.',
+        },
+      ],
+    },
+  }),
 }
 
 /* -------------------------------------------------------------------------- */

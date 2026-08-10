@@ -13,6 +13,8 @@ import {
   estrategaOutputSchema,
   guionistaInputSchema,
   guionistaOutputSchema,
+  investigadorInputSchema,
+  investigadorOutputSchema,
   pauteroInputSchema,
   pauteroOutputSchema,
   redactorInputSchema,
@@ -131,6 +133,15 @@ export const AGENTS = {
     description: 'presenta el mes y da seguimiento a las aprobaciones',
     input: cuentaInputSchema,
     output: cuentaOutputSchema,
+    writes: [],
+  },
+  investigador: {
+    key: 'investigador',
+    description: 'lee la transcripción de un video de YouTube y propone qué hacer con ella',
+    input: investigadorInputSchema,
+    output: investigadorOutputSchema,
+    // No escribe pieces: su entregable es un resumen y acciones sugeridas para
+    // que una persona decida a qué cliente (si alguno) alimentar.
     writes: [],
   },
 } as const satisfies { [K in AgentKey]: AgentContract<K> }

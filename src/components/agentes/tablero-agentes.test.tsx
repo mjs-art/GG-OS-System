@@ -5,8 +5,9 @@ import { AGENT_KEYS } from '@/agents/contracts'
 import type { MetricasAgente, PanelAgentes } from '@/lib/datos/agentes'
 
 /**
- * Prueba de humo del tablero: que las ocho tarjetas salgan del registro y que
- * apagado se vea como estado normal y no como falla.
+ * Prueba de humo del tablero: que las tarjetas salgan del registro (una por
+ * agente, sea cuál sea el número) y que apagado se vea como estado normal y
+ * no como falla.
  */
 
 // El Server Action no se ejecuta en jsdom y arrastraría el cliente de Supabase.
@@ -44,25 +45,29 @@ function panel(extra: Partial<PanelAgentes> = {}): PanelAgentes {
 }
 
 describe('el tablero de agentes', () => {
-  it('pinta los ocho, con el nombre y la línea del registro', () => {
+  it('pinta una tarjeta por agente, con el nombre y la línea del registro', () => {
     render(<TableroAgentes panel={panel()} />)
 
-    expect(screen.getAllByRole('article')).toHaveLength(8)
+    expect(screen.getAllByRole('article')).toHaveLength(AGENT_KEYS.length)
     expect(screen.getByRole('heading', { name: 'Editor de marca' })).toBeInTheDocument()
     expect(screen.getByText('escribe hook, copy y hashtags de cada pieza')).toBeInTheDocument()
   })
 
-  it('los ocho apagados no son un problema, y lo dice', () => {
+  it('todos apagados no es un problema, y lo dice', () => {
     render(<TableroAgentes panel={panel()} />)
 
-    expect(screen.getByText(/Los ocho están apagados, y así se entregan/)).toBeInTheDocument()
-    expect(screen.getAllByRole('switch', { name: /Encender para Bar Ficticio/ })).toHaveLength(8)
+    expect(
+      screen.getByText(new RegExp(`Los ${AGENT_KEYS.length} están apagados, y así se entregan`)),
+    ).toBeInTheDocument()
+    expect(screen.getAllByRole('switch', { name: /Encender para Bar Ficticio/ })).toHaveLength(
+      AGENT_KEYS.length,
+    )
   })
 
   it('sin corridas, la tasa de edición no finge un 0%', () => {
     render(<TableroAgentes panel={panel()} />)
 
-    expect(screen.getAllByText('Sin corridas que medir este mes.')).toHaveLength(8)
+    expect(screen.getAllByText('Sin corridas que medir este mes.')).toHaveLength(AGENT_KEYS.length)
   })
 
   it('el link de cada tarjeta arrastra el cliente elegido', () => {

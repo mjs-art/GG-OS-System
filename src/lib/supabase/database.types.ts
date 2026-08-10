@@ -433,6 +433,7 @@ export type Database = {
             | "pautero"
             | "auditor"
             | "cuenta"
+            | "investigador"
           client_id: string | null
           created_at: string
           enabled: boolean
@@ -453,6 +454,7 @@ export type Database = {
             | "pautero"
             | "auditor"
             | "cuenta"
+            | "investigador"
           client_id?: string | null
           created_at?: string
           enabled?: boolean
@@ -473,6 +475,7 @@ export type Database = {
             | "pautero"
             | "auditor"
             | "cuenta"
+            | "investigador"
           client_id?: string | null
           created_at?: string
           enabled?: boolean
@@ -511,6 +514,7 @@ export type Database = {
             | "pautero"
             | "auditor"
             | "cuenta"
+            | "investigador"
           client_id: string | null
           context_version: number | null
           cost_cents: number
@@ -539,6 +543,7 @@ export type Database = {
             | "pautero"
             | "auditor"
             | "cuenta"
+            | "investigador"
           client_id?: string | null
           context_version?: number | null
           cost_cents?: number
@@ -567,6 +572,7 @@ export type Database = {
             | "pautero"
             | "auditor"
             | "cuenta"
+            | "investigador"
           client_id?: string | null
           context_version?: number | null
           cost_cents?: number
@@ -818,6 +824,7 @@ export type Database = {
             | "pautero"
             | "auditor"
             | "cuenta"
+            | "investigador"
           cap_cents: number
           client_id: string | null
           created_at: string
@@ -837,6 +844,7 @@ export type Database = {
             | "pautero"
             | "auditor"
             | "cuenta"
+            | "investigador"
           cap_cents: number
           client_id?: string | null
           created_at?: string
@@ -856,6 +864,7 @@ export type Database = {
             | "pautero"
             | "auditor"
             | "cuenta"
+            | "investigador"
           cap_cents?: number
           client_id?: string | null
           created_at?: string
@@ -1086,6 +1095,7 @@ export type Database = {
             | "pautero"
             | "auditor"
             | "cuenta"
+            | "investigador"
             | null
           created_by_run: string | null
           differentiators: string[]
@@ -1115,6 +1125,7 @@ export type Database = {
             | "pautero"
             | "auditor"
             | "cuenta"
+            | "investigador"
             | null
           created_by_run?: string | null
           differentiators?: string[]
@@ -1144,6 +1155,7 @@ export type Database = {
             | "pautero"
             | "auditor"
             | "cuenta"
+            | "investigador"
             | null
           created_by_run?: string | null
           differentiators?: string[]
@@ -1191,6 +1203,7 @@ export type Database = {
             | "pautero"
             | "auditor"
             | "cuenta"
+            | "investigador"
           client_id: string | null
           created_at: string
           id: string
@@ -1214,6 +1227,7 @@ export type Database = {
             | "pautero"
             | "auditor"
             | "cuenta"
+            | "investigador"
           client_id?: string | null
           created_at?: string
           id?: string
@@ -1237,6 +1251,7 @@ export type Database = {
             | "pautero"
             | "auditor"
             | "cuenta"
+            | "investigador"
           client_id?: string | null
           created_at?: string
           id?: string
@@ -1343,6 +1358,7 @@ export type Database = {
             | "pautero"
             | "auditor"
             | "cuenta"
+            | "investigador"
             | null
           client_id: string
           created_at: string
@@ -1365,6 +1381,7 @@ export type Database = {
             | "pautero"
             | "auditor"
             | "cuenta"
+            | "investigador"
             | null
           client_id: string
           created_at?: string
@@ -1387,6 +1404,7 @@ export type Database = {
             | "pautero"
             | "auditor"
             | "cuenta"
+            | "investigador"
             | null
           client_id?: string
           created_at?: string
@@ -2392,6 +2410,70 @@ export type Database = {
           },
         ]
       }
+      video_summaries: {
+        Row: {
+          client_id: string | null
+          created_at: string
+          id: string
+          key_points: Json
+          org_id: string
+          run_id: string
+          suggested_actions: Json
+          summary: string
+          transcript: string
+          video_title: string | null
+          youtube_url: string
+        }
+        Insert: {
+          client_id?: string | null
+          created_at?: string
+          id?: string
+          key_points?: Json
+          org_id: string
+          run_id: string
+          suggested_actions?: Json
+          summary: string
+          transcript: string
+          video_title?: string | null
+          youtube_url: string
+        }
+        Update: {
+          client_id?: string | null
+          created_at?: string
+          id?: string
+          key_points?: Json
+          org_id?: string
+          run_id?: string
+          suggested_actions?: Json
+          summary?: string
+          transcript?: string
+          video_title?: string | null
+          youtube_url?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "video_summaries_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "video_summaries_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "video_summaries_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "agent_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       volume_plans: {
         Row: {
           approved_at: string | null
@@ -2600,6 +2682,7 @@ export type Database = {
             | "pautero"
             | "auditor"
             | "cuenta"
+            | "investigador"
             | null
           body: string | null
           client_id: string
@@ -2626,6 +2709,7 @@ export type Database = {
             | "pautero"
             | "auditor"
             | "cuenta"
+            | "investigador"
             | null
           body?: string | null
           client_id: string
@@ -2652,6 +2736,7 @@ export type Database = {
             | "pautero"
             | "auditor"
             | "cuenta"
+            | "investigador"
             | null
           body?: string | null
           client_id?: string

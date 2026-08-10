@@ -6,7 +6,7 @@ import { cn } from '@/lib/cn'
 import type { PanelAgentes } from '@/lib/datos/agentes'
 
 /**
- * AGENTES — las ocho tarjetas.
+ * AGENTES — una tarjeta por agente del registro.
  *
  * El selector de cliente de arriba no es un filtro cosmético: define a quién le
  * aplica el switch y contra qué tope se compara el gasto. Mezclar el costo de
@@ -40,9 +40,9 @@ export function TableroAgentes({ panel, basePath = '/agentes' }: TableroAgentesP
           // Cero encendidos no es un problema que reportar: es el estado de
           // fábrica. Se explica para que nadie "arregle" lo que no está roto.
           <p className="text-fg-muted max-w-prose text-[13px]">
-            Los ocho están apagados, y así se entregan. Encender un agente es una decisión por
-            cliente: préndelo en uno, mide costo, latencia y tasa de edición durante un mes
-            completo, y hasta entonces enciende el segundo.
+            Los {agentes.length} están apagados, y así se entregan. Encender un agente es una
+            decisión por cliente: préndelo en uno, mide costo, latencia y tasa de edición durante un
+            mes completo, y hasta entonces enciende el segundo.
           </p>
         )}
       </header>

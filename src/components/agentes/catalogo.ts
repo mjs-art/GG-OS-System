@@ -5,7 +5,7 @@ import { AGENT_LABEL, type AgentKey } from '@/domain/labels'
  * Lo que la pantalla de un agente enseña además de sus números: su prompt de
  * sistema y sus disparadores.
  *
- * Este archivo **no redeclara la lista de los ocho**. Las llaves, la
+ * Este archivo **no redeclara la lista de agentes**. Las llaves, la
  * descripción y los campos que cada uno puede escribir salen de
  * `@/agents/registry`, que es la fuente de verdad. Aquí solo vive lo que el
  * registro todavía no guarda.
@@ -69,6 +69,7 @@ export const DISPARADORES: Record<AgentKey, readonly Disparador[]> = {
     { tipo: 'evento', cuando: 'Cuando un comentario del cliente lleva 48 horas sin tarea' },
     { tipo: 'evento', cuando: 'Cuando el cliente lleva tres días sin responder' },
   ],
+  investigador: [{ tipo: 'manual', cuando: 'Al pegar un link de YouTube en Investigación' }],
 }
 
 export const DISPARADOR_LABEL: Record<Disparador['tipo'], string> = {

@@ -1,9 +1,10 @@
 -- =============================================================================
 -- El trigger que siembra las agent_policies al dar de alta un cliente (0012).
 --
--- Lo que se fija: dar de alta un cliente deja SIEMPRE sus ocho agentes listos
--- para encender, apagados y con el tope por default. Sin esto, el switch de
--- agentes de un cliente recién creado afecta cero renglones y no dice nada.
+-- Lo que se fija: dar de alta un cliente deja SIEMPRE sus agentes listos para
+-- encender, apagados y con el tope por default (uno por cada valor de
+-- `app.agent_key`, hoy nueve). Sin esto, el switch de agentes de un cliente
+-- recién creado afecta cero renglones y no dice nada.
 -- =============================================================================
 
 begin;
@@ -20,12 +21,12 @@ insert into public.clients (id, org_id, slug, name) values
   ('88882222-0000-4000-8000-000000000001', '88880000-0000-4000-8000-000000000001',
    'cliente-nuevo', 'Cliente Nuevo');
 
--- 1 · Se sembraron exactamente las ocho, una por agente.
+-- 1 · Se sembró exactamente una política por agente del enum.
 select is(
   (select count(*)::int from public.agent_policies
     where client_id = '88882222-0000-4000-8000-000000000001'),
-  8,
-  'Dar de alta un cliente siembra una política por cada uno de los 8 agentes'
+  (select count(*)::int from unnest(enum_range(null::app.agent_key))),
+  'Dar de alta un cliente siembra una política por cada agente del enum'
 );
 
 select is(
@@ -48,8 +49,8 @@ select is(
   (select count(*)::int from public.agent_policies
     where client_id = '88882222-0000-4000-8000-000000000001'
       and monthly_cap_cents = 500),
-  8,
-  'Las ocho traen el tope de gasto por default (500¢)'
+  (select count(*)::int from unnest(enum_range(null::app.agent_key))),
+  'Todas traen el tope de gasto por default (500¢)'
 );
 
 -- 4 · El org_id sembrado es el del cliente, no otro: el guard org↔cliente
@@ -58,7 +59,7 @@ select is(
   (select count(*)::int from public.agent_policies
     where client_id = '88882222-0000-4000-8000-000000000001'
       and org_id = '88880000-0000-4000-8000-000000000001'),
-  8,
+  (select count(*)::int from unnest(enum_range(null::app.agent_key))),
   'Cada política siembra el org_id del cliente'
 );
 

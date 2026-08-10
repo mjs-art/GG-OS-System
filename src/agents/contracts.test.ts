@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { AGENT_KEYS, escalationSchema, monthKeySchema, type AgentKey } from '@/agents/contracts'
@@ -28,15 +28,26 @@ describe('registro de agentes', () => {
    * agrega un noveno agente en una migración y se le olvida el contrato, esta
    * prueba truena antes de que el runner explote con un `undefined`.
    */
-  it('cubre exactamente el enum app.agent_key de la migración', () => {
-    const sql = readFileSync(
-      resolve(process.cwd(), 'supabase/migrations/20260801000001_foundation.sql'),
-      'utf8',
-    )
-    const block = /create type app\.agent_key as enum \(([\s\S]*?)\);/.exec(sql)?.[1] ?? ''
-    const fromDatabase = [...block.matchAll(/'([a-z_]+)'/g)].map((match) => match[1])
+  it('cubre exactamente el enum app.agent_key de las migraciones', () => {
+    // El enum nace en foundation.sql y crece con `alter type ... add value` en
+    // migraciones posteriores (nunca se edita una migración ya aplicada) — se
+    // concatenan todas, en orden, para reconstruir la lista completa.
+    const dir = resolve(process.cwd(), 'supabase/migrations')
+    const sql = readdirSync(dir)
+      .filter((archivo) => archivo.endsWith('.sql'))
+      .sort()
+      .map((archivo) => readFileSync(resolve(dir, archivo), 'utf8'))
+      .join('\n')
 
-    expect(fromDatabase.length).toBe(8)
+    const creado = /create type app\.agent_key as enum \(([\s\S]*?)\);/.exec(sql)?.[1] ?? ''
+    const agregados = [...sql.matchAll(/alter type app\.agent_key add value '([a-z_]+)'/g)].map(
+      (match) => match[1],
+    )
+    const fromDatabase = [
+      ...[...creado.matchAll(/'([a-z_]+)'/g)].map((match) => match[1]),
+      ...agregados,
+    ]
+
     expect(fromDatabase).toEqual([...AGENT_KEYS])
     expect(Object.keys(AGENTS).sort()).toEqual([...AGENT_KEYS].sort())
   })

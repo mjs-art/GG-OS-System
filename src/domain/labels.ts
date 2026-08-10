@@ -82,6 +82,7 @@ export const AGENT_LABEL: Record<AgentKey, string> = {
   pautero: 'Pautero',
   auditor: 'Auditor',
   cuenta: 'Cuenta',
+  investigador: 'Investigador',
 }
 
 /** Los estados a partir de los cuales el cliente ve la pieza. Espeja `app.is_client_visible`. */

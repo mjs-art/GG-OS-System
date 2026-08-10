@@ -99,6 +99,15 @@ const serverSchema = z.object({
   N8N_SEND_WEBHOOK_URL: z.url().optional(),
 
   /**
+   * Webhook de n8n que baja la transcripción de un video de YouTube para el
+   * agente Investigador. Recibe la URL del video, responde con la
+   * transcripción en la misma llamada (nodo "Respond to Webhook" en n8n) — no
+   * hay reporte async como en WhatsApp, porque quien pega el link espera el
+   * resultado en la misma pantalla.
+   */
+  N8N_INVESTIGADOR_WEBHOOK_URL: z.url().optional(),
+
+  /**
    * Secreto del cron. El scheduler (Vercel Cron, GitHub Action, n8n, lo que sea)
    * lo manda en el header `x-cron-secret` al pegarle a `/api/jobs/cron`. Sin él
    * configurado, esa ruta responde 503 y no corre nada a ciegas — igual que el

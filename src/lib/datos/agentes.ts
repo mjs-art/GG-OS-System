@@ -17,7 +17,7 @@ import type { Json } from '@/lib/supabase/database.types'
  * lo único que se muta en toda la sección —encender o apagar un agente— vive en
  * una Server Action sobre `agent_policies`.
  *
- * La lista de los ocho agentes NO se declara aquí: sale de `@/agents/registry`,
+ * La lista de agentes NO se declara aquí: sale de `@/agents/registry`,
  * que es la fuente de verdad de sus llaves, sus descripciones y de qué campos
  * escribe cada uno.
  */
@@ -71,7 +71,7 @@ export interface PanelAgentes {
 }
 
 /**
- * El tablero de los ocho.
+ * El tablero de agentes.
  *
  * Todo lo que se muestra queda **acotado al cliente activo** cuando hay uno.
  * Mezclar el costo de todos los clientes con el tope de uno solo produce una
@@ -201,7 +201,7 @@ export async function panelAgentes(ahora: Date, clienteSlug?: string): Promise<P
  *
  * `corriendo` gana sobre `con_errores` porque una corrida en vuelo puede
  * todavía salir bien, y el punto describe qué está pasando ahora, no qué pasó.
- * `inactivo` NO es un problema: los ocho nacen apagados a propósito.
+ * `inactivo` NO es un problema: todos nacen apagados a propósito.
  */
 function estadoDe(corridas: readonly { status: string }[]): EstadoAgente {
   if (corridas.some((r) => r.status === 'corriendo' || r.status === 'pendiente')) return 'corriendo'
