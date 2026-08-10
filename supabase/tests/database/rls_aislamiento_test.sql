@@ -19,7 +19,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(24);
+select plan(32);
 
 -- ---------------------------------------------------------------------------
 -- Helpers de sesión. Reproducen lo que hace PostgREST con el JWT.
@@ -96,6 +96,17 @@ insert into public.agent_runs (org_id, client_id, agent, status, cost_cents) val
   ('99990000-0000-4000-8000-000000000001', '99992222-0000-4000-8000-000000000001',
    'redactor', 'ok', 42);
 
+-- Corrida "sin cliente" (investigación general) — client_id nulo es válido desde
+-- la migración de agentes sin cliente.
+insert into public.agent_runs (org_id, client_id, agent, status, cost_cents) values
+  ('99990000-0000-4000-8000-000000000001', null, 'redactor', 'ok', 77);
+
+insert into public.escalations (org_id, client_id, agent, severity, question) values
+  ('99990000-0000-4000-8000-000000000001', null, 'redactor', 'media', 'pregunta sin cliente');
+
+insert into public.agent_policies (org_id, client_id, agent, enabled, monthly_cap_cents) values
+  ('99990000-0000-4000-8000-000000000001', null, 'redactor', true, 1000);
+
 insert into public.brand_rules (org_id, client_id, kind, rule) values
   ('99990000-0000-4000-8000-000000000001', '99992222-0000-4000-8000-000000000001',
    'hashtags', 'regla de prueba');
@@ -126,6 +137,28 @@ select is(
   'El estudio ve solo su propia org'
 );
 
+-- ---------------------------------------------------------------------------
+-- Corridas de agente sin cliente (investigación general): el estudio las ve
+-- por ser miembro de la org, no por ser "staff de un cliente" — no hay cliente.
+-- ---------------------------------------------------------------------------
+select is(
+  (select count(*) from public.agent_runs
+    where client_id is null and org_id = '99990000-0000-4000-8000-000000000001')::int, 1,
+  'El estudio ve una corrida sin cliente de su propia org'
+);
+
+select is(
+  (select count(*) from public.escalations
+    where client_id is null and org_id = '99990000-0000-4000-8000-000000000001')::int, 1,
+  'El estudio ve un escalamiento sin cliente de su propia org'
+);
+
+select is(
+  (select count(*) from public.agent_policies
+    where client_id is null and org_id = '99990000-0000-4000-8000-000000000001')::int, 1,
+  'El estudio ve una política sin cliente de su propia org'
+);
+
 select pg_temp.login('99991111-0000-4000-8000-000000000003', 'rls-rival@test.invalid');
 
 select is(
@@ -151,6 +184,24 @@ select throws_ok(
              '99992222-0000-4000-8000-000000000001', '2026-10', 'post') $$,
   null,
   'La agencia rival no puede insertar una pieza en un cliente ajeno'
+);
+
+select is(
+  (select count(*) from public.agent_runs
+    where client_id is null and org_id = '99990000-0000-4000-8000-000000000001')::int, 0,
+  'La agencia rival no ve la corrida sin cliente de la otra agencia'
+);
+
+select is(
+  (select count(*) from public.escalations
+    where client_id is null and org_id = '99990000-0000-4000-8000-000000000001')::int, 0,
+  'La agencia rival no ve el escalamiento sin cliente de la otra agencia'
+);
+
+select is(
+  (select count(*) from public.agent_policies
+    where client_id is null and org_id = '99990000-0000-4000-8000-000000000001')::int, 0,
+  'La agencia rival no ve la política sin cliente de la otra agencia'
 );
 
 -- ===========================================================================
@@ -274,6 +325,11 @@ select is(
   'Un usuario sin membresía no ve ninguna pieza'
 );
 
+select is(
+  (select count(*) from public.agent_runs where client_id is null)::int, 0,
+  'Un usuario sin membresía no ve ninguna corrida sin cliente'
+);
+
 -- ===========================================================================
 -- 4 · Coherencia de tenencia: org_id no puede mentir
 -- ===========================================================================
@@ -286,6 +342,15 @@ select throws_ok(
              '99992222-0000-4000-8000-000000000001', '2026-10', 'post') $$,
   null,
   'Ni con superusuario se puede guardar una pieza con un org_id que no corresponde al cliente'
+);
+
+-- El índice único parcial (agentes sin cliente) permite a lo más una política
+-- "de la agencia" por agente: la fixture ya sembró una para 'redactor' en T1.
+select throws_ok(
+  $$ insert into public.agent_policies (org_id, client_id, agent, enabled, monthly_cap_cents)
+     values ('99990000-0000-4000-8000-000000000001', null, 'redactor', true, 500) $$,
+  null,
+  'No se puede sembrar una segunda política sin cliente para el mismo agente en la misma org'
 );
 
 select * from finish();

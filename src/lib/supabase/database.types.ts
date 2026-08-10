@@ -54,88 +54,6 @@ export type Database = {
           },
         ]
       }
-      budget_alerts: {
-        Row: {
-          agent:
-            | "estratega"
-            | "analista"
-            | "guionista"
-            | "redactor"
-            | "editor_marca"
-            | "pautero"
-            | "auditor"
-            | "cuenta"
-          cap_cents: number
-          client_id: string
-          created_at: string
-          estado: string
-          id: string
-          org_id: string
-          run_id: string | null
-          spent_cents: number
-        }
-        Insert: {
-          agent:
-            | "estratega"
-            | "analista"
-            | "guionista"
-            | "redactor"
-            | "editor_marca"
-            | "pautero"
-            | "auditor"
-            | "cuenta"
-          cap_cents: number
-          client_id: string
-          created_at?: string
-          estado: string
-          id?: string
-          org_id: string
-          run_id?: string | null
-          spent_cents: number
-        }
-        Update: {
-          agent?:
-            | "estratega"
-            | "analista"
-            | "guionista"
-            | "redactor"
-            | "editor_marca"
-            | "pautero"
-            | "auditor"
-            | "cuenta"
-          cap_cents?: number
-          client_id?: string
-          created_at?: string
-          estado?: string
-          id?: string
-          org_id?: string
-          run_id?: string | null
-          spent_cents?: number
-        }
-        Relationships: [
-          {
-            foreignKeyName: "budget_alerts_client_id_fkey"
-            columns: ["client_id"]
-            isOneToOne: false
-            referencedRelation: "clients"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "budget_alerts_org_id_fkey"
-            columns: ["org_id"]
-            isOneToOne: false
-            referencedRelation: "orgs"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "budget_alerts_run_id_fkey"
-            columns: ["run_id"]
-            isOneToOne: false
-            referencedRelation: "agent_runs"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       ad_creatives: {
         Row: {
           ad_set_id: string
@@ -515,7 +433,7 @@ export type Database = {
             | "pautero"
             | "auditor"
             | "cuenta"
-          client_id: string
+          client_id: string | null
           created_at: string
           enabled: boolean
           id: string
@@ -535,7 +453,7 @@ export type Database = {
             | "pautero"
             | "auditor"
             | "cuenta"
-          client_id: string
+          client_id?: string | null
           created_at?: string
           enabled?: boolean
           id?: string
@@ -555,7 +473,7 @@ export type Database = {
             | "pautero"
             | "auditor"
             | "cuenta"
-          client_id?: string
+          client_id?: string | null
           created_at?: string
           enabled?: boolean
           id?: string
@@ -593,7 +511,7 @@ export type Database = {
             | "pautero"
             | "auditor"
             | "cuenta"
-          client_id: string
+          client_id: string | null
           context_version: number | null
           cost_cents: number
           duration_ms: number | null
@@ -621,7 +539,7 @@ export type Database = {
             | "pautero"
             | "auditor"
             | "cuenta"
-          client_id: string
+          client_id?: string | null
           context_version?: number | null
           cost_cents?: number
           duration_ms?: number | null
@@ -649,7 +567,7 @@ export type Database = {
             | "pautero"
             | "auditor"
             | "cuenta"
-          client_id?: string
+          client_id?: string | null
           context_version?: number | null
           cost_cents?: number
           duration_ms?: number | null
@@ -885,6 +803,88 @@ export type Database = {
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      budget_alerts: {
+        Row: {
+          agent:
+            | "estratega"
+            | "analista"
+            | "guionista"
+            | "redactor"
+            | "editor_marca"
+            | "pautero"
+            | "auditor"
+            | "cuenta"
+          cap_cents: number
+          client_id: string | null
+          created_at: string
+          estado: string
+          id: string
+          org_id: string
+          run_id: string | null
+          spent_cents: number
+        }
+        Insert: {
+          agent:
+            | "estratega"
+            | "analista"
+            | "guionista"
+            | "redactor"
+            | "editor_marca"
+            | "pautero"
+            | "auditor"
+            | "cuenta"
+          cap_cents: number
+          client_id?: string | null
+          created_at?: string
+          estado: string
+          id?: string
+          org_id: string
+          run_id?: string | null
+          spent_cents: number
+        }
+        Update: {
+          agent?:
+            | "estratega"
+            | "analista"
+            | "guionista"
+            | "redactor"
+            | "editor_marca"
+            | "pautero"
+            | "auditor"
+            | "cuenta"
+          cap_cents?: number
+          client_id?: string | null
+          created_at?: string
+          estado?: string
+          id?: string
+          org_id?: string
+          run_id?: string | null
+          spent_cents?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "budget_alerts_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "budget_alerts_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "budget_alerts_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "agent_runs"
             referencedColumns: ["id"]
           },
         ]
@@ -1191,7 +1191,7 @@ export type Database = {
             | "pautero"
             | "auditor"
             | "cuenta"
-          client_id: string
+          client_id: string | null
           created_at: string
           id: string
           options: Json
@@ -1214,7 +1214,7 @@ export type Database = {
             | "pautero"
             | "auditor"
             | "cuenta"
-          client_id: string
+          client_id?: string | null
           created_at?: string
           id?: string
           options?: Json
@@ -1237,7 +1237,7 @@ export type Database = {
             | "pautero"
             | "auditor"
             | "cuenta"
-          client_id?: string
+          client_id?: string | null
           created_at?: string
           id?: string
           options?: Json
